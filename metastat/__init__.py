@@ -44,6 +44,7 @@ from eddy.core.plugin import AbstractPlugin
 from eddy.ui.dock import DockWidget
 from .widgets import MetastatWidget  # noqa
 
+
 LOGGER = getLogger()
 
 
@@ -90,9 +91,7 @@ class MetastatPlugin(AbstractPlugin):
         connect(self.project.sgnPrefixAdded, widget.onPrefixChanged)
         connect(self.project.sgnPrefixModified, widget.onPrefixChanged)
         connect(self.project.sgnPrefixRemoved, widget.onPrefixChanged)
-        connect(K_REPO_MONITOR.sgnUpdated, widget.doUpdateState)
         widget.onPrefixChanged()
-        widget.doUpdateState()
 
     @QtCore.pyqtSlot()
     def doUpdateState(self):
@@ -115,7 +114,6 @@ class MetastatPlugin(AbstractPlugin):
         disconnect(self.project.sgnPrefixAdded, widget.onPrefixChanged)
         disconnect(self.project.sgnPrefixModified, widget.onPrefixChanged)
         disconnect(self.project.sgnPrefixRemoved, widget.onPrefixChanged)
-        disconnect(K_REPO_MONITOR.sgnUpdated, widget.doUpdateState)
 
         # DISCONNECT FROM ACTIVE SESSION
         self.debug('Disconnecting from active session')

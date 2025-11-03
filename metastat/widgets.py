@@ -56,14 +56,7 @@ from eddy.core.commands.iri import CommandIRIAddAnnotationAssertion
 from eddy.core.datatypes.graphol import Item
 from eddy.core.functions.misc import first
 from eddy.core.functions.signals import connect
-from eddy.core.metadata import (
-    Entity,
-    K_GRAPH,
-    LiteralValue,
-    MetadataRequest,
-    NamedEntity,
-    Repository,
-)
+
 from eddy.core.output import getLogger
 from eddy.ui.fields import (
     ComboBox,
@@ -71,6 +64,14 @@ from eddy.ui.fields import (
     StringField,
     TextField,
 )
+
+from eddy.core.metadata import (
+    Entity,
+    MetadataRequest,
+    Repository,
+)
+
+from .core import K_GRAPH, NamedEntity, LiteralValue
 
 LOGGER = getLogger()
 
@@ -102,11 +103,50 @@ class MetastatWidget(QtWidgets.QWidget):
         self.search = StringField(self)
         self.search.setAcceptDrops(False)
         self.search.setClearButtonEnabled(True)
-        self.search.setPlaceholderText('Search...')
+        self.search.setPlaceholderText('Search in IRI...')
         self.search.setFixedHeight(30)
-        self.combobox = QtWidgets.QComboBox(self)
-        self.combobox.addItems(map(lambda r: r.name, Repository.load()))
-        self.combobox.setCurrentIndex(self.settings.value('metadata/index', 0, int))
+        self.searchLabel = QtWidgets.QLabel(self, objectName='iri_label')
+        self.searchLabel.setText('IRI:')
+        self.searchLabel.setMargin(1)
+        self.searchLabel.setFixedWidth(80)
+        self.searchLabel.setAlignment(QtCore.Qt.AlignRight)
+        self.typeComboBoxLabel = QtWidgets.QLabel(self, objectName='type_combobox_label')
+        self.typeComboBoxLabel.setText('Type:')
+        self.typeComboBoxLabel.setMargin(1)
+        self.typeComboBoxLabel.setFixedWidth(80)
+        self.typeComboBoxLabel.setAlignment(QtCore.Qt.AlignRight)
+        self.typeCombobox = ComboBox(self)
+        self.typeCombobox.addItems(["", "UnitType", "Variabile", "Variabile Specifica", "classificazione"])
+        self.lemmaLabel = QtWidgets.QLabel(self, objectName='lemma_label')
+        self.lemmaLabel.setText('Lemma:')
+        self.lemmaLabel.setMargin(1)
+        self.lemmaLabel.setFixedWidth(80)
+        self.lemmaLabel.setAlignment(QtCore.Qt.AlignRight)
+        self.lemma = StringField(self)
+        self.lemma.setAcceptDrops(False)
+        self.lemma.setClearButtonEnabled(True)
+        self.lemma.setPlaceholderText('Search in lemma...')
+        self.lemma.setFixedHeight(30)
+        self.descriptionLabel = QtWidgets.QLabel(self, objectName='description_label')
+        self.descriptionLabel.setText('Description:')
+        self.descriptionLabel.setMargin(1)
+        self.descriptionLabel.setFixedWidth(80)
+        self.descriptionLabel.setAlignment(QtCore.Qt.AlignRight)
+        self.description = StringField(self)
+        self.description.setAcceptDrops(False)
+        self.description.setClearButtonEnabled(True)
+        self.description.setPlaceholderText('Search in description...')
+        self.description.setFixedHeight(30)
+        self.ownerLabel = QtWidgets.QLabel(self, objectName='owner_label')
+        self.ownerLabel.setText('Owner:')
+        self.ownerLabel.setMargin(1)
+        self.ownerLabel.setFixedWidth(80)
+        self.ownerLabel.setAlignment(QtCore.Qt.AlignRight)
+        self.owner = StringField(self)
+        self.owner.setAcceptDrops(False)
+        self.owner.setClearButtonEnabled(True)
+        self.owner.setPlaceholderText('Search in project owner...')
+        self.owner.setFixedHeight(30)
         self.model = QtGui.QStandardItemModel(self)
         self.proxy = MetastatFilterProxyModel(self)
         self.proxy.setDynamicSortFilter(False)
@@ -119,15 +159,33 @@ class MetastatWidget(QtWidgets.QWidget):
 
         self.searchLayout = QtWidgets.QHBoxLayout()
         self.searchLayout.setContentsMargins(0, 0, 0, 0)
+        self.searchLayout.addWidget(self.searchLabel)
         self.searchLayout.addWidget(self.search)
-        self.searchLayout.addWidget(self.combobox)
+        self.searchLayout2 = QtWidgets.QHBoxLayout()
+        self.searchLayout2.setContentsMargins(0, 0, 0, 0)
+        self.searchLayout2.addWidget(self.typeComboBoxLabel)
+        self.searchLayout2.addWidget(self.typeCombobox)
+        self.searchLayout3 = QtWidgets.QHBoxLayout()
+        self.searchLayout3.setContentsMargins(0, 0, 0, 0)
+        self.searchLayout3.addWidget(self.lemmaLabel)
+        self.searchLayout3.addWidget(self.lemma)
+        self.searchLayout4 = QtWidgets.QHBoxLayout()
+        self.searchLayout4.addWidget(self.descriptionLabel)
+        self.searchLayout4.addWidget(self.description)
+        self.searchLayout5 = QtWidgets.QHBoxLayout()
+        self.searchLayout5.addWidget(self.ownerLabel)
+        self.searchLayout5.addWidget(self.owner)
         self.mainLayout = QtWidgets.QVBoxLayout(self)
         self.mainLayout.setContentsMargins(0, 0, 0, 0)
         self.mainLayout.addLayout(self.searchLayout)
+        self.mainLayout.addLayout(self.searchLayout2)
+        self.mainLayout.addLayout(self.searchLayout3)
+        self.mainLayout.addLayout(self.searchLayout4)
+        self.mainLayout.addLayout(self.searchLayout5)
         self.mainLayout.addWidget(self.entityview)
         self.mainLayout.addWidget(self.details)
-        self.setTabOrder(self.search, self.combobox)
-        self.setTabOrder(self.combobox, self.entityview)
+        self.setTabOrder(self.search, self.typeCombobox)
+        self.setTabOrder(self.typeCombobox, self.entityview)
         self.setTabOrder(self.entityview, self.details)
 
         self.setContentsMargins(0, 0, 0, 0)
@@ -149,13 +207,18 @@ class MetastatWidget(QtWidgets.QWidget):
         connect(self.entityview.activated, self.onItemActivated)
         connect(self.entityview.doubleClicked, self.onItemDoubleClicked)
         connect(self.entityview.pressed, self.onItemPressed)
-        connect(self.search.textChanged, self.doFilterItem)
+        connect(self.search.textChanged, self.doFilterItemByIri)
         connect(self.search.returnPressed, self.onReturnPressed)
-        connect(self.combobox.currentIndexChanged, self.onRepositoryChanged)
+        connect(self.typeCombobox.currentIndexChanged, self.doFilterItemByType)
+        connect(self.lemma.textChanged, self.doFilterItemByLemma)
+        connect(self.description.textChanged, self.doFilterItemByDescription)
+        connect(self.owner.textChanged, self.doFilterItemByOwner)
         # connect(self.sgnItemActivated, self.session.doFocusItem)
         # connect(self.sgnItemDoubleClicked, self.session.doFocusItem)
         # connect(self.sgnItemRightClicked, self.session.doFocusItem)
 
+        self.getData()
+        self.redraw()
     #############################################
     #   PROPERTIES
     #################################
@@ -196,35 +259,57 @@ class MetastatWidget(QtWidgets.QWidget):
     #################################
 
     @QtCore.pyqtSlot(str)
-    def doFilterItem(self, key):
+    def doFilterItemByIri(self, key):
         """
         Executed when the search box is filled with data.
         :type key: str
         """
+        self.proxy.setFilterKeyColumn(0)
         self.proxy.setFilterFixedString(key)
         self.proxy.sort(QtCore.Qt.AscendingOrder)
 
-    @QtCore.pyqtSlot()
-    def doUpdateState(self):
+    @QtCore.pyqtSlot(int)
+    def doFilterItemByType(self, index):
         """
-        Executed to refresh the metadata widget.
+        Executed when the selected type in the combobox changes.
         """
-        repos = Repository.load()
-        if len(repos) > 0:
-            index = self.combobox.currentIndex()
-            # Prevent signals while refreshing the combobox
-            status = self.combobox.blockSignals(True)
-            self.combobox.clear()
-            self.combobox.addItems(map(lambda r: r.name, repos))
-            self.combobox.blockSignals(status)
-            # Force repetition of current selection to trigger refresh
-            self.combobox.setCurrentIndex(index)
-            self.combobox.currentIndexChanged.emit(index)
-        else:
-            self.model.clear()
-            self.details.repository = None
-            self.details.entity = None
-            self.details.stack()
+        type = self.typeCombobox.itemText(index)
+        self.model.clear()
+        if type:
+            #self.proxy.setType(type)
+            self.proxy.setFilterKeyColumn(1)
+            self.proxy.setFilterFixedString(type)
+            self.proxy.sort(QtCore.Qt.AscendingOrder)
+
+    @QtCore.pyqtSlot(str)
+    def doFilterItemByLemma(self, key):
+        """
+        Executed when the search box is filled with data.
+        :type key: str
+        """
+        self.proxy.setFilterKeyColumn(2)
+        self.proxy.setFilterFixedString(key)
+        self.proxy.sort(QtCore.Qt.AscendingOrder)
+
+    @QtCore.pyqtSlot(str)
+    def doFilterItemByDescription(self, key):
+        """
+        Executed when the search box is filled with data.
+        :type key: str
+        """
+        self.proxy.setFilterKeyColumn(3)
+        self.proxy.setFilterFixedString(key)
+        self.proxy.sort(QtCore.Qt.AscendingOrder)
+
+    @QtCore.pyqtSlot(str)
+    def doFilterItemByOwner(self, key):
+        """
+        Executed when the search box is filled with data.
+        :type key: str
+        """
+        self.proxy.setFilterKeyColumn(3)
+        self.proxy.setFilterFixedString(key)
+        self.proxy.sort(QtCore.Qt.AscendingOrder)
 
     @QtCore.pyqtSlot(QtCore.QModelIndex)
     def onItemActivated(self, index):
@@ -296,33 +381,18 @@ class MetastatWidget(QtWidgets.QWidget):
         """
         self.focusNextChild()
 
-    @QtCore.pyqtSlot(int)
-    def onRepositoryChanged(self, index):
-        """
-        Executed when the selected repository in the combobox changes.
-        """
-        name = self.combobox.itemText(index)
-        repo = first(Repository.load(), filter_on_item=lambda i: i.name == name)
-        self.model.clear()
-        if repo:
-            self.settings.setValue('metadata/index', self.combobox.currentIndex())
-            url = QtCore.QUrl(repo.uri)
-            url.setPath(f'{url.path()}/classes')
-            request = QtNetwork.QNetworkRequest(url)
-            request.setAttribute(MetadataRequest.RepositoryAttribute, repo)
-            reply = self.session.nmanager.get(request)
-            connect(reply.finished, self.onRequestCompleted)
-        else:
-            repo = None
-        self.details.repository = repo
-        self.details.entity = None
-        self.details.stack()
+    def getData(self):
+        url = QtCore.QUrl('https://obdasys.ddns.net/metastat')
+        url.setPath(f'{url.path()}/all')
+        request = QtNetwork.QNetworkRequest(url)
+        reply = self.session.nmanager.get(request)
+        connect(reply.finished, self.onRequestCompleted)
 
     @QtCore.pyqtSlot()
     def onRequestCompleted(self):
         """
         Executed when a metadata request has completed to update the widget.
-        """
+
         reply = self.sender()
         try:
             reply.deleteLater()
@@ -345,6 +415,33 @@ class MetastatWidget(QtWidgets.QWidget):
                 self.session.statusBar().showMessage(msg)
         except Exception as e:
             LOGGER.error(f'Failed to retrieve metadata: {e}')
+        """
+        reply = self.sender()
+        try:
+            reply.deleteLater()
+            if reply.isFinished() and reply.error() == QtNetwork.QNetworkReply.NoError:
+                data = json.loads(str(reply.readAll(), encoding='utf-8'))
+                for d in data:
+                    itemText = d["id"]
+                    item = QtGui.QStandardItem(self.iconConcept, f"{itemText}")
+                    item.setData(NamedEntity.from_dict(d))
+                    self.model.appendRow(item)
+            elif reply.isFinished() and reply.error() != QtNetwork.QNetworkReply.NoError:
+                msg = f'Failed to retrieve metadata: {reply.errorString()}'
+                LOGGER.warning(msg)
+                self.session.statusBar().showMessage(msg)
+        except Exception as e:
+            LOGGER.error(f'Failed to retrieve metadata: {e}')
+        '''
+        with open("C:/Users/maria/Downloads/entities.json", "r") as read_content:
+            data = json.load(read_content)
+            for d in data:
+                itemText = d["id"]
+                item = QtGui.QStandardItem(self.iconConcept, f"{itemText}")
+                item.setData(NamedEntity.from_dict(d))
+                self.model.appendRow(item)
+        '''
+
 
     #############################################
     #   INTERFACE
@@ -356,12 +453,12 @@ class MetastatWidget(QtWidgets.QWidget):
         """
         for index in range(self.model.rowCount()):
             item = self.model.item(index, 0)
-            if isinstance(item.data(), NamedEntity):
-                try:
-                    itemText = K_GRAPH.namespace_manager.curie(item.data().iri, generate=False)
-                except KeyError:
-                    itemText = item.data().iri
-                item.setText(itemText)
+            #if isinstance(item.data(), NamedEntity):
+            try:
+                itemText = K_GRAPH.namespace_manager.curie(item.data().id, generate=False)
+            except ValueError:
+                itemText = item.data().id
+            item.setText(itemText)
         self.entityview.update()
         self.details.redraw()
 
@@ -442,11 +539,11 @@ class MetastatView(QtWidgets.QListView):
                     item = model.itemFromIndex(index)
                     data = item.data()
                     if data:
-                        if isinstance(data, Entity):
+                        if isinstance(data, NamedEntity):
                             mimeData = QtCore.QMimeData()
                             mimeData.setText(str(Item.ConceptNode.value))
                             buf = QtCore.QByteArray()
-                            buf.append(data.name)
+                            buf.append(data.id)
                             mimeData.setData(str(Item.ConceptNode.value), buf)
                             drag = QtGui.QDrag(self)
                             drag.setMimeData(mimeData)
@@ -454,10 +551,11 @@ class MetastatView(QtWidgets.QListView):
 
                             # Add assertion indicating source
                             from eddy.core.owl import IRI, AnnotationAssertion
-                            subj = self.session.project.getIRI(str(data.name))  # type: IRI
+                            subj = self.session.project.getIRI(str(data.id))  # type: IRI
                             pred = self.session.project.getIRI('urn:x-graphol:origin')
-                            loc = QtCore.QUrl(data.repository.uri)
-                            loc.setPath(f'{loc.path()}/entities/{data.id}'.replace('//', '/'))
+                            #loc = QtCore.QUrl(data.repository.uri)
+                            #loc.setPath(f'{loc.path()}/entities/{data.id}'.replace('//', '/'))
+                            loc = "metastat"
                             obj = IRI(loc.toString())
                             ast = AnnotationAssertion(subj, pred, obj)
                             cmd = CommandIRIAddAnnotationAssertion(self.session.project, subj, ast)
@@ -500,7 +598,14 @@ class MetastatFilterProxyModel(QtCore.QSortFilterProxyModel):
     """
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.id = ''
+        self.type = ''
+        self.lemma = ''
+        self.description = ''
+        self.owner = ''
 
+    def setType(self, type: str):
+        self.type = type
     #############################################
     #   INTERFACE
     #################################
@@ -525,15 +630,12 @@ class MetastatInfoWidget(QtWidgets.QScrollArea):
         """
         super().__init__(parent)
 
-        self.repository = None
         self.entity = None
         self.stacked = QtWidgets.QStackedWidget(self)
         self.stacked.setContentsMargins(0, 0, 0, 0)
         self.infoEmpty = EmptyInfo(self.stacked)
-        self.infoRepository = RepositoryInfo(self.stacked)
         self.infoEntity = EntityInfo(self.stacked)
         self.stacked.addWidget(self.infoEmpty)
-        self.stacked.addWidget(self.infoRepository)
         self.stacked.addWidget(self.infoEntity)
         self.setContentsMargins(0, 0, 0, 0)
         self.setMinimumSize(QtCore.QSize(216, 120))
@@ -641,10 +743,7 @@ class MetastatInfoWidget(QtWidgets.QScrollArea):
         """
         if self.entity:
             show = self.infoEntity
-            show.updateData(self.repository, self.entity)
-        elif self.repository:
-            show = self.infoRepository
-            show.updateData(self.repository)
+            show.updateData(self.entity)
         else:
             show = self.infoEmpty
 
@@ -801,55 +900,6 @@ class AbstractInfo(QtWidgets.QWidget):
         pass
 
 
-class RepositoryInfo(AbstractInfo):
-    """
-    This class implements the repository information box.
-    """
-    def __init__(self, parent: QtWidgets.QWidget = None) -> None:
-        """
-        Initialize the repository information box.
-        """
-        super().__init__(parent)
-
-        self.nameKey = Key('Name', self)
-        self.nameField = String(self)
-        self.nameField.setReadOnly(True)
-
-        self.uriKey = Key('Location', self)
-        self.uriField = String(self)
-        self.uriField.setReadOnly(True)
-
-        self.versionKey = Key('Version', self)
-        self.versionField = String(self)
-        self.versionField.setReadOnly(True)
-
-        self.infoHeader = Header('Repository Info', self)
-        self.infoLayout = QtWidgets.QFormLayout()
-        self.infoLayout.setSpacing(0)
-        self.infoLayout.addRow(self.nameKey, self.nameField)
-        self.infoLayout.addRow(self.uriKey, self.uriField)
-        self.infoLayout.addRow(self.versionKey, self.versionField)
-
-        self.mainLayout = QtWidgets.QVBoxLayout(self)
-        self.mainLayout.setAlignment(QtCore.Qt.AlignTop)
-        self.mainLayout.setContentsMargins(0, 0, 0, 0)
-        self.mainLayout.setSpacing(0)
-        self.mainLayout.insertWidget(0, self.infoHeader)
-        self.mainLayout.insertLayout(1, self.infoLayout)
-
-    #############################################
-    #   INTERFACE
-    #################################
-
-    def updateData(self, repository: Repository) -> None:
-        """
-        Fetch new information and fill the widget with data.
-        """
-        self.nameField.setValue(repository.name)
-        self.uriField.setValue(repository.uri)
-        self.versionField.setValue('1.0')
-
-
 class EntityInfo(AbstractInfo):
     """
     This class implements the information box for entities.
@@ -861,9 +911,9 @@ class EntityInfo(AbstractInfo):
         super().__init__(parent)
 
         self.entity = None
-        self.repoKey = Key('Repository', self)
-        self.repoField = String(self)
-        self.repoField.setReadOnly(True)
+        self.ownerKey = Key('Owner', self)
+        self.ownerField = String(self)
+        self.ownerField.setReadOnly(True)
 
         self.idKey = Key('Entity ID', self)
         self.idField = String(self)
@@ -876,9 +926,9 @@ class EntityInfo(AbstractInfo):
         self.nodePropHeader = Header('Entity properties', self)
         self.nodePropLayout = QtWidgets.QFormLayout()
         self.nodePropLayout.setSpacing(0)
-        self.nodePropLayout.addRow(self.repoKey, self.repoField)
         self.nodePropLayout.addRow(self.idKey, self.idField)
         self.nodePropLayout.addRow(self.iriKey, self.iriField)
+        self.nodePropLayout.addRow(self.ownerKey, self.ownerField)
 
         self.typesHeader = Header('Entity Types', self)
         self.typesLayout = QtWidgets.QFormLayout()
@@ -903,24 +953,23 @@ class EntityInfo(AbstractInfo):
     #   INTERFACE
     #################################
 
-    def updateData(self, repository: Repository, entity: Entity) -> None:
+    def updateData(self, entity: Entity) -> None:
         """
         Fetch new information and fill the widget with data.
         """
-        self.repoField.setValue(repository.uri)
         self.idField.setValue(entity.id)
-        self.iriField.setValue(entity.name)
+        if entity.owner:
+            self.ownerField.setValue(entity.owner.name)
 
-        # ENTITY TYPES
+        # ENTITY TYPE
         while self.typesLayout.rowCount() > 0:
             self.typesLayout.removeRow(0)
-        for t in entity.types:
-            self.typesLayout.addRow(Key('Type', self), String(t.name, self))
+        self.typesLayout.addRow(Key('Type', self), String(entity.type, self))
 
         # ENTITY ANNOTATIONS
         while self.metadataLayout.rowCount() > 0:
             self.metadataLayout.removeRow(0)
-        for a in entity.annotations:
+        for a in entity.lemmas:
             self.metadataLayout.addRow(Key('Property', self), String(a.predicate.n3(), self))
             if isinstance(a.object, LiteralValue):
                 literal = cast(LiteralValue, a.object)
@@ -933,7 +982,19 @@ class EntityInfo(AbstractInfo):
             else:
                 self.metadataLayout.addRow(Key('Entity', self), String(a.object.n3(), self))
             self.metadataLayout.addItem(QtWidgets.QSpacerItem(10, 2))
-
+        for a in entity.definitions:
+            self.metadataLayout.addRow(Key('Property', self), String(a.predicate.n3(), self))
+            if isinstance(a.object, LiteralValue):
+                literal = cast(LiteralValue, a.object)
+                value, lang, dtype = literal.value, literal.language, literal.datatype
+                self.metadataLayout.addRow(Key('Value', self), Text(value, self))
+                if lang:
+                    self.metadataLayout.addRow(Key('lang', self), String(lang, self))
+                if dtype:
+                    self.metadataLayout.addRow(Key('dtype', self), String(dtype.n3(), self))
+            else:
+                self.metadataLayout.addRow(Key('Entity', self), String(a.object.n3(), self))
+            self.metadataLayout.addItem(QtWidgets.QSpacerItem(10, 2))
 
 class EmptyInfo(QtWidgets.QTextEdit):
     """
@@ -954,8 +1015,7 @@ class EmptyInfo(QtWidgets.QTextEdit):
         painter.setPen(self.palette().placeholderText().color())
         fm = self.fontMetrics()
         bgMsg = textwrap.dedent("""
-        To start using 'Metastat', add a repository location
-        in the 'Ontology Manager -> Metastat Repositories' tab.
+        Click on a list item to see more info.
         """)
         elided_text = fm.elidedText(bgMsg, QtCore.Qt.ElideRight, self.viewport().width())
         painter.drawText(self.viewport().rect(), QtCore.Qt.AlignCenter, elided_text)
