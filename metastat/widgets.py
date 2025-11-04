@@ -153,6 +153,7 @@ class MetastatWidget(QtWidgets.QWidget):
         self.proxy.setFilterCaseSensitivity(QtCore.Qt.CaseInsensitive)
         self.proxy.setSortCaseSensitivity(QtCore.Qt.CaseSensitive)
         self.proxy.setSourceModel(self.model)
+        #self.proxy.setType("")
         self.entityview = MetastatView(self)
         self.entityview.setModel(self.proxy)
         self.details = MetastatInfoWidget(self)
@@ -209,10 +210,10 @@ class MetastatWidget(QtWidgets.QWidget):
         connect(self.entityview.pressed, self.onItemPressed)
         connect(self.search.textChanged, self.doFilterItemByIri)
         connect(self.search.returnPressed, self.onReturnPressed)
-        connect(self.typeCombobox.currentIndexChanged, self.doFilterItemByType)
-        connect(self.lemma.textChanged, self.doFilterItemByLemma)
-        connect(self.description.textChanged, self.doFilterItemByDescription)
-        connect(self.owner.textChanged, self.doFilterItemByOwner)
+        #connect(self.typeCombobox.currentIndexChanged, self.doFilterItemByType)
+        #connect(self.lemma.textChanged, self.doFilterItemByLemma)
+        #connect(self.description.textChanged, self.doFilterItemByDescription)
+        #connect(self.owner.textChanged, self.doFilterItemByOwner)
         # connect(self.sgnItemActivated, self.session.doFocusItem)
         # connect(self.sgnItemDoubleClicked, self.session.doFocusItem)
         # connect(self.sgnItemRightClicked, self.session.doFocusItem)
@@ -267,7 +268,7 @@ class MetastatWidget(QtWidgets.QWidget):
         self.proxy.setFilterKeyColumn(0)
         self.proxy.setFilterFixedString(key)
         self.proxy.sort(QtCore.Qt.AscendingOrder)
-
+    '''
     @QtCore.pyqtSlot(int)
     def doFilterItemByType(self, index):
         """
@@ -310,7 +311,7 @@ class MetastatWidget(QtWidgets.QWidget):
         self.proxy.setFilterKeyColumn(3)
         self.proxy.setFilterFixedString(key)
         self.proxy.sort(QtCore.Qt.AscendingOrder)
-
+    '''
     @QtCore.pyqtSlot(QtCore.QModelIndex)
     def onItemActivated(self, index):
         """
@@ -453,12 +454,12 @@ class MetastatWidget(QtWidgets.QWidget):
         """
         for index in range(self.model.rowCount()):
             item = self.model.item(index, 0)
-            #if isinstance(item.data(), NamedEntity):
-            try:
-                itemText = K_GRAPH.namespace_manager.curie(item.data().id, generate=False)
-            except ValueError:
-                itemText = item.data().id
-            item.setText(itemText)
+            if isinstance(item.data(), NamedEntity):
+                try:
+                    itemText = K_GRAPH.namespace_manager.curie(item.data().id, generate=False)
+                except ValueError:
+                    itemText = item.data().id
+                item.setText(itemText)
         self.entityview.update()
         self.details.redraw()
 
@@ -598,14 +599,7 @@ class MetastatFilterProxyModel(QtCore.QSortFilterProxyModel):
     """
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.id = ''
-        self.type = ''
-        self.lemma = ''
-        self.description = ''
-        self.owner = ''
 
-    def setType(self, type: str):
-        self.type = type
     #############################################
     #   INTERFACE
     #################################
@@ -618,7 +612,6 @@ class MetastatFilterProxyModel(QtCore.QSortFilterProxyModel):
         :rtype: bool
         """
         return sourceParent.isValid() or super().filterAcceptsRow(sourceRow, sourceParent)
-
 
 class MetastatInfoWidget(QtWidgets.QScrollArea):
     """

@@ -123,7 +123,7 @@ class NamedEntity(Node):
         return super().__eq__(other) and self.id == cast(NamedEntity, other).id
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({self.id}, \"{self.iri}\")"
+        return f"{self.__class__.__name__}({self.id}, \"{self.type}\")"
 
 class Annotation(Node):
     """
@@ -159,14 +159,12 @@ class Annotation(Node):
         l = data["lang"]
 
         sub = NamedEntity.from_dict(s)
-        print(p)
         prop = URIRef(p)
 
-        if "id" in v:
+        if isinstance(v, dict) and "id" in v:
             obj = NamedEntity.from_dict(v) if "iri" in v else AnonymousEntity.from_dict(v)
         else:
             obj = LiteralValue.from_dict({"value": v, "language": l})
-
         return Annotation(cast(NamedEntity, sub), prop, obj)
 
     def to_dict(self, deep: bool = False) -> dict:
