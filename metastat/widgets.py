@@ -433,16 +433,6 @@ class MetastatWidget(QtWidgets.QWidget):
                 self.session.statusBar().showMessage(msg)
         except Exception as e:
             LOGGER.error(f'Failed to retrieve metadata: {e}')
-        '''
-        with open("C:/Users/maria/Downloads/entities.json", "r") as read_content:
-            data = json.load(read_content)
-            for d in data:
-                itemText = d["id"]
-                item = QtGui.QStandardItem(self.iconConcept, f"{itemText}")
-                item.setData(NamedEntity.from_dict(d))
-                self.model.appendRow(item)
-        '''
-
 
     #############################################
     #   INTERFACE
@@ -775,7 +765,10 @@ class Key(QtWidgets.QLabel):
         Initialize the key.
         """
         super().__init__(*args)
-        self.setFixedSize(88, 20)
+        if "Value" in args[0]:
+            self.setFixedSize(88, 40)
+        else:
+            self.setFixedSize(88, 20)
 
 
 class Button(QtWidgets.QPushButton):
@@ -916,16 +909,17 @@ class EntityInfo(AbstractInfo):
         self.iriField = String(self)
         self.iriField.setReadOnly(True)
 
+        self.typeKey = Key('Type', self)
+        self.typeField = String(self)
+        self.typeField.setReadOnly(True)
+
         self.nodePropHeader = Header('Entity properties', self)
         self.nodePropLayout = QtWidgets.QFormLayout()
         self.nodePropLayout.setSpacing(0)
         self.nodePropLayout.addRow(self.idKey, self.idField)
         self.nodePropLayout.addRow(self.iriKey, self.iriField)
         self.nodePropLayout.addRow(self.ownerKey, self.ownerField)
-
-        self.typesHeader = Header('Entity Types', self)
-        self.typesLayout = QtWidgets.QFormLayout()
-        self.typesLayout.setSpacing(0)
+        self.nodePropLayout.addRow(self.typeKey, self.typeField)
 
         self.metadataHeader = Header('Entity Annotations', self)
         self.metadataLayout = QtWidgets.QFormLayout()
@@ -937,8 +931,6 @@ class EntityInfo(AbstractInfo):
         self.mainLayout.setSpacing(0)
         self.mainLayout.addWidget(self.nodePropHeader)
         self.mainLayout.addLayout(self.nodePropLayout)
-        self.mainLayout.addWidget(self.typesHeader)
-        self.mainLayout.addLayout(self.typesLayout)
         self.mainLayout.addWidget(self.metadataHeader)
         self.mainLayout.addLayout(self.metadataLayout)
 
@@ -953,17 +945,15 @@ class EntityInfo(AbstractInfo):
         self.idField.setValue(entity.id)
         if entity.owner:
             self.ownerField.setValue(entity.owner.name)
-
         # ENTITY TYPE
-        while self.typesLayout.rowCount() > 0:
-            self.typesLayout.removeRow(0)
-        self.typesLayout.addRow(Key('Type', self), String(entity.type, self))
+        if entity.type:
+            self.typeField.setValue(entity.type)
 
         # ENTITY ANNOTATIONS
         while self.metadataLayout.rowCount() > 0:
             self.metadataLayout.removeRow(0)
         for a in entity.lemmas:
-            self.metadataLayout.addRow(Key('Property', self), String(a.predicate.n3(), self))
+            self.metadataLayout.addRow(Key('Property', self), String("Label", self))
             if isinstance(a.object, LiteralValue):
                 literal = cast(LiteralValue, a.object)
                 value, lang, dtype = literal.value, literal.language, literal.datatype
@@ -976,7 +966,7 @@ class EntityInfo(AbstractInfo):
                 self.metadataLayout.addRow(Key('Entity', self), String(a.object.n3(), self))
             self.metadataLayout.addItem(QtWidgets.QSpacerItem(10, 2))
         for a in entity.definitions:
-            self.metadataLayout.addRow(Key('Property', self), String(a.predicate.n3(), self))
+            self.metadataLayout.addRow(Key('Property', self), String("Comment", self))
             if isinstance(a.object, LiteralValue):
                 literal = cast(LiteralValue, a.object)
                 value, lang, dtype = literal.value, literal.language, literal.datatype
