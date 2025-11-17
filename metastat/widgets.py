@@ -541,7 +541,8 @@ class MetastatView(QtWidgets.QListView):
                             drag.exec_(QtCore.Qt.CopyAction)
 
                             # Add assertion indicating source
-                            from eddy.core.owl import IRI, AnnotationAssertion
+                            from eddy.core.owl import IRI, AnnotationAssertion, AnnotationAssertionProperty, Literal
+                            print(data)
                             subj = self.session.project.getIRI(str(data.id))  # type: IRI
                             pred = self.session.project.getIRI('urn:x-graphol:origin')
                             #loc = QtCore.QUrl(data.repository.uri)
@@ -551,6 +552,20 @@ class MetastatView(QtWidgets.QListView):
                             ast = AnnotationAssertion(subj, pred, obj)
                             cmd = CommandIRIAddAnnotationAssertion(self.session.project, subj, ast)
                             self.session.undostack.push(cmd)
+                            for l in data.lemmas:
+                                subj = self.session.project.getIRI(str(data.id))  # type: IRI
+                                pred = AnnotationAssertionProperty.Label.value
+                                literal = cast(LiteralValue, l.object)
+                                ast = AnnotationAssertion(subj, pred, literal.value, literal.datatype, literal.language)
+                                cmd = CommandIRIAddAnnotationAssertion(self.session.project, subj, ast)
+                                self.session.undostack.push(cmd)
+                            for d in data.definitions:
+                                subj = self.session.project.getIRI(str(data.id))  # type: IRI
+                                pred = AnnotationAssertionProperty.Comment.value
+                                literal = cast(LiteralValue, d.object)
+                                ast = AnnotationAssertion(subj, pred, literal.value, literal.datatype, literal.language)
+                                cmd = CommandIRIAddAnnotationAssertion(self.session.project, subj, ast)
+                                self.session.undostack.push(cmd)
 
         super().mouseMoveEvent(mouseEvent)
 
