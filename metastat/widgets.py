@@ -110,13 +110,17 @@ class MetastatWidget(QtWidgets.QWidget):
         self.searchLabel.setMargin(1)
         self.searchLabel.setFixedWidth(80)
         self.searchLabel.setAlignment(QtCore.Qt.AlignRight)
-        self.typeComboBoxLabel = QtWidgets.QLabel(self, objectName='type_combobox_label')
-        self.typeComboBoxLabel.setText('Type:')
-        self.typeComboBoxLabel.setMargin(1)
-        self.typeComboBoxLabel.setFixedWidth(80)
-        self.typeComboBoxLabel.setAlignment(QtCore.Qt.AlignRight)
-        self.typeCombobox = ComboBox(self)
-        self.typeCombobox.addItems(["", "UnitType", "Variabile", "Variabile Specifica", "classificazione"])
+        self.typeLabel = QtWidgets.QLabel(self, objectName='type_label')
+        self.typeLabel.setText('Type:')
+        self.typeLabel.setMargin(1)
+        self.typeLabel.setFixedWidth(80)
+        self.typeLabel.setAlignment(QtCore.Qt.AlignRight)
+        self.type = StringField(self)
+        #self.type.addItems(["", "UnitType", "Variabile", "Variabile Specifica", "classificazione"])
+        self.type.setAcceptDrops(False)
+        self.type.setClearButtonEnabled(True)
+        self.type.setPlaceholderText('Search type...')
+        self.type.setFixedHeight(30)
         self.lemmaLabel = QtWidgets.QLabel(self, objectName='lemma_label')
         self.lemmaLabel.setText('Lemma:')
         self.lemmaLabel.setMargin(1)
@@ -164,8 +168,8 @@ class MetastatWidget(QtWidgets.QWidget):
         self.searchLayout.addWidget(self.search)
         self.searchLayout2 = QtWidgets.QHBoxLayout()
         self.searchLayout2.setContentsMargins(0, 0, 0, 0)
-        self.searchLayout2.addWidget(self.typeComboBoxLabel)
-        self.searchLayout2.addWidget(self.typeCombobox)
+        self.searchLayout2.addWidget(self.typeLabel)
+        self.searchLayout2.addWidget(self.type)
         self.searchLayout3 = QtWidgets.QHBoxLayout()
         self.searchLayout3.setContentsMargins(0, 0, 0, 0)
         self.searchLayout3.addWidget(self.lemmaLabel)
@@ -185,8 +189,8 @@ class MetastatWidget(QtWidgets.QWidget):
         self.mainLayout.addLayout(self.searchLayout5)
         self.mainLayout.addWidget(self.entityview)
         self.mainLayout.addWidget(self.details)
-        self.setTabOrder(self.search, self.typeCombobox)
-        self.setTabOrder(self.typeCombobox, self.entityview)
+        self.setTabOrder(self.search, self.type)
+        self.setTabOrder(self.type, self.entityview)
         self.setTabOrder(self.entityview, self.details)
 
         self.setContentsMargins(0, 0, 0, 0)
@@ -208,12 +212,16 @@ class MetastatWidget(QtWidgets.QWidget):
         connect(self.entityview.activated, self.onItemActivated)
         connect(self.entityview.doubleClicked, self.onItemDoubleClicked)
         connect(self.entityview.pressed, self.onItemPressed)
-        connect(self.search.textChanged, self.doFilterItemByIri)
+        connect(self.search.textChanged, self.filterIri)
         connect(self.search.returnPressed, self.onReturnPressed)
-        #connect(self.typeCombobox.currentIndexChanged, self.doFilterItemByType)
-        #connect(self.lemma.textChanged, self.doFilterItemByLemma)
-        #connect(self.description.textChanged, self.doFilterItemByDescription)
-        #connect(self.owner.textChanged, self.doFilterItemByOwner)
+        connect(self.type.textChanged, self.filterType)
+        connect(self.type.returnPressed, self.onReturnPressed)
+        connect(self.lemma.textChanged, self.filterLemma)
+        connect(self.lemma.returnPressed, self.onReturnPressed)
+        connect(self.description.textChanged, self.filterDescription)
+        connect(self.description.returnPressed, self.onReturnPressed)
+        connect(self.owner.textChanged, self.filterOwner)
+        connect(self.owner.returnPressed, self.onReturnPressed)
         # connect(self.sgnItemActivated, self.session.doFocusItem)
         # connect(self.sgnItemDoubleClicked, self.session.doFocusItem)
         # connect(self.sgnItemRightClicked, self.session.doFocusItem)
@@ -259,59 +267,6 @@ class MetastatWidget(QtWidgets.QWidget):
     #   SLOTS
     #################################
 
-    @QtCore.pyqtSlot(str)
-    def doFilterItemByIri(self, key):
-        """
-        Executed when the search box is filled with data.
-        :type key: str
-        """
-        self.proxy.setFilterKeyColumn(0)
-        self.proxy.setFilterFixedString(key)
-        self.proxy.sort(QtCore.Qt.AscendingOrder)
-    '''
-    @QtCore.pyqtSlot(int)
-    def doFilterItemByType(self, index):
-        """
-        Executed when the selected type in the combobox changes.
-        """
-        type = self.typeCombobox.itemText(index)
-        self.model.clear()
-        if type:
-            #self.proxy.setType(type)
-            self.proxy.setFilterKeyColumn(1)
-            self.proxy.setFilterFixedString(type)
-            self.proxy.sort(QtCore.Qt.AscendingOrder)
-
-    @QtCore.pyqtSlot(str)
-    def doFilterItemByLemma(self, key):
-        """
-        Executed when the search box is filled with data.
-        :type key: str
-        """
-        self.proxy.setFilterKeyColumn(2)
-        self.proxy.setFilterFixedString(key)
-        self.proxy.sort(QtCore.Qt.AscendingOrder)
-
-    @QtCore.pyqtSlot(str)
-    def doFilterItemByDescription(self, key):
-        """
-        Executed when the search box is filled with data.
-        :type key: str
-        """
-        self.proxy.setFilterKeyColumn(3)
-        self.proxy.setFilterFixedString(key)
-        self.proxy.sort(QtCore.Qt.AscendingOrder)
-
-    @QtCore.pyqtSlot(str)
-    def doFilterItemByOwner(self, key):
-        """
-        Executed when the search box is filled with data.
-        :type key: str
-        """
-        self.proxy.setFilterKeyColumn(3)
-        self.proxy.setFilterFixedString(key)
-        self.proxy.sort(QtCore.Qt.AscendingOrder)
-    '''
     @QtCore.pyqtSlot(QtCore.QModelIndex)
     def onItemActivated(self, index):
         """
@@ -341,7 +296,7 @@ class MetastatWidget(QtWidgets.QWidget):
             item = self.model.itemFromIndex(self.proxy.mapToSource(index))
             if item:
                 self.details.entity = item.data()
-                self.details.repository = item.data().repository
+                #self.details.repository = item.data().repository
                 self.sgnItemDoubleClicked.emit(item)
                 self.details.stack()
 
@@ -359,6 +314,35 @@ class MetastatWidget(QtWidgets.QWidget):
                 #self.details.repository = item.data().repository
                 self.sgnItemDoubleClicked.emit(item)
                 self.details.stack()
+    def filterIri(self, text):
+
+        self.proxy.setIriFilter(text)
+        self.details.entity = None
+        self.details.stack()
+
+    def filterType(self, text):
+
+        self.proxy.setTypeFilter(text)
+        self.details.entity = None
+        self.details.stack()
+
+    def filterLemma(self, text):
+
+        self.proxy.setLemmaFilter(text)
+        self.details.entity = None
+        self.details.stack()
+
+    def filterDescription(self, text):
+
+        self.proxy.setDescriptionFilter(text)
+        self.details.entity = None
+        self.details.stack()
+
+    def filterOwner(self, text):
+
+        self.proxy.setOwnerFilter(text)
+        self.details.entity = None
+        self.details.stack()
 
     @QtCore.pyqtSlot()
     @QtCore.pyqtSlot(str)
@@ -542,7 +526,6 @@ class MetastatView(QtWidgets.QListView):
 
                             # Add assertion indicating source
                             from eddy.core.owl import IRI, AnnotationAssertion, AnnotationAssertionProperty, Literal
-                            print(data)
                             subj = self.session.project.getIRI(str(data.id))  # type: IRI
                             pred = self.session.project.getIRI('urn:x-graphol:origin')
                             #loc = QtCore.QUrl(data.repository.uri)
@@ -605,18 +588,75 @@ class MetastatFilterProxyModel(QtCore.QSortFilterProxyModel):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-    #############################################
-    #   INTERFACE
-    #################################
+        self.filter_iri = ""
+        self.filter_type = ""
+        self.filter_lemma = ""
+        self.filter_description = ""
+        self.filter_owner = ""
 
-    def filterAcceptsRow(self, sourceRow: int, sourceParent: QtCore.QModelIndex) -> bool:
-        """
-        Overrides filterAcceptsRow to include extra filtering conditions
-        :type sourceRow: int
-        :type sourceParent: QModelIndex
-        :rtype: bool
-        """
-        return sourceParent.isValid() or super().filterAcceptsRow(sourceRow, sourceParent)
+    def setIriFilter(self, text):
+        self.filter_iri = text
+        self.invalidateFilter()
+
+    def setTypeFilter(self, text):
+        # "" = no filter
+        self.filter_type = text
+        self.invalidateFilter()
+
+    def setLemmaFilter(self, text):
+        self.filter_lemma = text
+        self.invalidateFilter()
+
+    def setDescriptionFilter(self, text):
+        self.filter_description = text
+        self.invalidateFilter()
+
+    def setOwnerFilter(self, text):
+        self.filter_owner = text
+        self.invalidateFilter()
+
+    def filterAcceptsRow(self, sourceRow, sourceParent):
+        model = self.sourceModel()
+        item = model.itemFromIndex(model.index(sourceRow, 0))
+        data = item.data()
+        if data:
+            if isinstance(data, NamedEntity):
+                iri = data.iri
+                varType = data.type
+                lemmas = data.lemmas
+                descriptions = data.definitions
+                owner = data.owner
+            else:
+                return False
+        else:
+            return False
+
+        if self.filter_iri and self.filter_iri.lower() not in iri.lower():
+            return False
+
+        if self.filter_type and self.filter_type.lower() not in varType.lower():
+            return False
+
+        if self.filter_lemma:
+            lemma_contains = False
+            for l in lemmas:
+                if self.filter_lemma.lower() in l.object.value.lower():
+                    lemma_contains = True
+            if not lemma_contains:
+                return False
+
+        if self.filter_description:
+            description_contains = False
+            for d in descriptions:
+                if self.filter_description.lower() in d.object.value.lower():
+                    description_contains = True
+            if not description_contains:
+                return False
+
+        if self.filter_owner and self.filter_owner.lower() not in owner.lower():
+            return False
+
+        return True
 
 class MetastatInfoWidget(QtWidgets.QScrollArea):
     """
