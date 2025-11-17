@@ -526,7 +526,7 @@ class MetastatView(QtWidgets.QListView):
 
                             # Add assertion indicating source
                             from eddy.core.owl import IRI, AnnotationAssertion, AnnotationAssertionProperty, Literal
-                            subj = self.session.project.getIRI(str(data.id))  # type: IRI
+                            subj = self.session.project.getIRI("http://www.istat.it/metastat/"+str(data.id))  # type: IRI
                             pred = self.session.project.getIRI('urn:x-graphol:origin')
                             #loc = QtCore.QUrl(data.repository.uri)
                             #loc.setPath(f'{loc.path()}/entities/{data.id}'.replace('//', '/'))
@@ -536,14 +536,14 @@ class MetastatView(QtWidgets.QListView):
                             cmd = CommandIRIAddAnnotationAssertion(self.session.project, subj, ast)
                             self.session.undostack.push(cmd)
                             for l in data.lemmas:
-                                subj = self.session.project.getIRI(str(data.id))  # type: IRI
+                                #subj = self.session.project.getIRI(str(data.id))  # type: IRI
                                 pred = AnnotationAssertionProperty.Label.value
                                 literal = cast(LiteralValue, l.object)
                                 ast = AnnotationAssertion(subj, pred, literal.value, literal.datatype, literal.language)
                                 cmd = CommandIRIAddAnnotationAssertion(self.session.project, subj, ast)
                                 self.session.undostack.push(cmd)
                             for d in data.definitions:
-                                subj = self.session.project.getIRI(str(data.id))  # type: IRI
+                                #subj = self.session.project.getIRI(str(data.id))  # type: IRI
                                 pred = AnnotationAssertionProperty.Comment.value
                                 literal = cast(LiteralValue, d.object)
                                 ast = AnnotationAssertion(subj, pred, literal.value, literal.datatype, literal.language)
