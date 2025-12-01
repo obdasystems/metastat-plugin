@@ -829,7 +829,7 @@ class Key(QtWidgets.QLabel):
         Initialize the key.
         """
         super().__init__(*args)
-        if "Value" in args[0]:
+        if "Lemma" in args[0] or "Description" in args[0]:
             self.setFixedSize(88, 40)
         else:
             self.setFixedSize(88, 20)
@@ -1017,30 +1017,30 @@ class EntityInfo(AbstractInfo):
         while self.metadataLayout.rowCount() > 0:
             self.metadataLayout.removeRow(0)
         for a in entity.lemmas:
-            self.metadataLayout.addRow(Key('Property', self), String("Label", self))
+            #self.metadataLayout.addRow(Key('Property', self), String("Label", self))
             if isinstance(a.object, LiteralValue):
                 literal = cast(LiteralValue, a.object)
                 value, lang, dtype = literal.value, literal.language, literal.datatype
-                self.metadataLayout.addRow(Key('Value', self), Text(value, self))
+                self.metadataLayout.addRow(Key('Lemma', self), Text(value, self))
                 if lang:
-                    self.metadataLayout.addRow(Key('lang', self), String(lang, self))
+                    self.metadataLayout.addRow(Key('Language', self), String(lang, self))
                 if dtype:
-                    self.metadataLayout.addRow(Key('dtype', self), String(dtype.n3(), self))
+                    self.metadataLayout.addRow(Key('Type', self), String(dtype.n3(), self))
             else:
-                self.metadataLayout.addRow(Key('Entity', self), String(a.object.n3(), self))
+                self.metadataLayout.addRow(Key('Lemma', self), String(a.object.n3(), self))
             self.metadataLayout.addItem(QtWidgets.QSpacerItem(10, 2))
         for a in entity.definitions:
-            self.metadataLayout.addRow(Key('Property', self), String("Comment", self))
+            #self.metadataLayout.addRow(Key('Property', self), String("Comment", self))
             if isinstance(a.object, LiteralValue):
                 literal = cast(LiteralValue, a.object)
                 value, lang, dtype = literal.value, literal.language, literal.datatype
-                self.metadataLayout.addRow(Key('Value', self), Text(value, self))
+                self.metadataLayout.addRow(Key('Description', self), Text(value, self))
                 if lang:
-                    self.metadataLayout.addRow(Key('lang', self), String(lang, self))
+                    self.metadataLayout.addRow(Key('Language', self), String(lang, self))
                 if dtype:
-                    self.metadataLayout.addRow(Key('dtype', self), String(dtype.n3(), self))
+                    self.metadataLayout.addRow(Key('Type', self), String(dtype.n3(), self))
             else:
-                self.metadataLayout.addRow(Key('Entity', self), String(a.object.n3(), self))
+                self.metadataLayout.addRow(Key('Description', self), String(a.object.n3(), self))
             self.metadataLayout.addItem(QtWidgets.QSpacerItem(10, 2))
 
 class EmptyInfo(QtWidgets.QTextEdit):
