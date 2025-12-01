@@ -94,11 +94,15 @@ class MetastatWidget(QtWidgets.QWidget):
 
         self.plugin = plugin
         self.settings = QtCore.QSettings()
-        self.iconAttribute = QtGui.QIcon(':/icons/18/ic_treeview_attribute')
-        self.iconConcept = QtGui.QIcon(':/icons/18/ic_treeview_concept')
-        self.iconInstance = QtGui.QIcon(':/icons/18/ic_treeview_instance')
-        self.iconRole = QtGui.QIcon(':/icons/18/ic_treeview_role')
-        self.iconValue = QtGui.QIcon(':/icons/18/ic_treeview_value')
+        self.variableIcon = QtGui.QPixmap(18, 18)
+        self.variableIcon.fill(QtGui.QColor("#FDFD96"))
+        self.variableIcon = QtGui.QIcon(self.variableIcon)
+        self.unitTypeIcon = QtGui.QPixmap(18, 18)
+        self.unitTypeIcon.fill(QtGui.QColor("#CFFFE5"))
+        self.unitTypeIcon = QtGui.QIcon(self.unitTypeIcon)
+        self.classificationIcon = QtGui.QPixmap(18, 18)
+        self.classificationIcon.fill(QtGui.QColor("#E6E6FA"))
+        self.classificationIcon = QtGui.QIcon(self.classificationIcon)
 
         self.search = StringField(self)
         self.search.setAcceptDrops(False)
@@ -408,7 +412,12 @@ class MetastatWidget(QtWidgets.QWidget):
                 data = json.loads(str(reply.readAll(), encoding='utf-8'))
                 for d in data:
                     itemText = d["id"]
-                    item = QtGui.QStandardItem(self.iconConcept, f"{itemText}")
+                    if d["type"] == "variable":
+                        item = QtGui.QStandardItem(self.variableIcon, f"{itemText}")
+                    elif d["type"] == "classification":
+                        item = QtGui.QStandardItem(self.classificationIcon, f"{itemText}")
+                    elif d["type"] == "unit-type":
+                        item = QtGui.QStandardItem(self.unitTypeIcon, f"{itemText}")
                     item.setData(NamedEntity.from_dict(d))
                     self.model.appendRow(item)
             elif reply.isFinished() and reply.error() != QtNetwork.QNetworkReply.NoError:
