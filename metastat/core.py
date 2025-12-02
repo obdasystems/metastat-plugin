@@ -1,15 +1,44 @@
-from abc import ABCMeta, abstractmethod
-from typing import cast, Optional, Union
+# -*- coding: utf-8 -*-
 
-from rdflib import (
-    BNode,
-    Graph,
-    IdentifiedNode,
-    Literal,
-    URIRef,
+##########################################################################
+#                                                                        #
+#  Eddy: a graphical editor for the specification of Graphol ontologies  #
+#  Copyright (C) 2015 Daniele Pantaleone <danielepantaleone@me.com>      #
+#                                                                        #
+#  This program is free software: you can redistribute it and/or modify  #
+#  it under the terms of the GNU General Public License as published by  #
+#  the Free Software Foundation, either version 3 of the License, or     #
+#  (at your option) any later version.                                   #
+#                                                                        #
+#  This program is distributed in the hope that it will be useful,       #
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of        #
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the          #
+#  GNU General Public License for more details.                          #
+#                                                                        #
+#  You should have received a copy of the GNU General Public License     #
+#  along with this program. If not, see <http://www.gnu.org/licenses/>.  #
+#                                                                        #
+#  #####################                          #####################  #
+#                                                                        #
+#  Graphol is developed by members of the DASI-lab group of the          #
+#  Dipartimento di Ingegneria Informatica, Automatica e Gestionale       #
+#  A.Ruberti at Sapienza University of Rome: http://www.dis.uniroma1.it  #
+#                                                                        #
+#     - Domenico Lembo <lembo@dis.uniroma1.it>                           #
+#     - Valerio Santarelli <santarelli@dis.uniroma1.it>                  #
+#     - Domenico Fabio Savo <savo@dis.uniroma1.it>                       #
+#     - Daniele Pantaleone <pantaleone@dis.uniroma1.it>                  #
+#     - Marco Console <console@dis.uniroma1.it>                          #
+#                                                                        #
+##########################################################################
+
+
+from __future__ import annotations
+
+from abc import (
+    ABCMeta,
+    abstractmethod,
 )
-
-K_GRAPH = Graph(bind_namespaces='none')
 
 
 class Node(metaclass=ABCMeta):
@@ -28,10 +57,54 @@ class Node(metaclass=ABCMeta):
         """Serializes the object to a dict."""
         pass
 
+
+class LiteralValue(Node):
+    """
+    Represent a literal value associated with entity metadata.
+    """
+
+    def __init__(self, value: str, language: str | None = None) -> None:
+        """Initialize the literal."""
+        super().__init__()
+        self._value = value
+        self._lang = language
+
+    @property
+    def value(self) -> str:
+        """Return the value of this literal."""
+        return self._value
+
+    @property
+    def lang(self) -> str | None:
+        """Return the language tag of this literal, or `None` if there is no tag."""
+        return self._lang
+
+    @classmethod
+    def from_dict(cls, data: dict, **kwargs) -> LiteralValue:
+        return cls(data["value"], data["lang"])
+
+    def to_dict(self, deep: bool = False) -> dict:
+        return {
+            "value": self.value,
+            "lang": self.lang,
+        }
+
+    def __eq__(self, other: LiteralValue) -> bool:
+        return (
+                super().__eq__(other)
+                and self.value == other.value
+                and self.lang == other.lang
+        )
+
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__}("{self.value}"@{self.lang})'
+
+
 class Owner(Node):
     """
     Represents process owners.
     """
+
     def __init__(self, id_: str, name: str) -> None:
         """Initialize the named entity."""
         super().__init__()
@@ -45,63 +118,75 @@ class Owner(Node):
     @property
     def name(self) -> str:
         return self._name
+
     @classmethod
-    def from_dict(cls, data: dict, **kwargs) -> Node:
-        if "id" in data:
-            owner = Owner(data["id"], data["name"])
-            return owner
-        return None
+    def from_dict(cls, data: dict, **kwargs) -> Owner:
+        return Owner(data.get("id"), data.get("name"))
 
     def to_dict(self, deep: bool = False) -> dict:
-        res = {
-            "id": self.id,
-            "name": self.name,
-        }
+        res = {}
+        if self.id:
+            res['id'] = self.id
+        if self.name:
+            res['name'] = self.name
         return res
+
 
 class NamedEntity(Node):
     """
     Represents entities that are uniquely identified with an IRI.
     """
 
-    def __init__(self, id_: str ) -> None:
+    def __init__(self, id_: str) -> None:
         """Initialize the named entity."""
         super().__init__()
         self._id = id_
-        self._iri = id_ if isinstance(id_, URIRef) else URIRef(id_)
-        self.lemmas = []
-        self.definitions = []
-        self.type = None
-        self.owner = None
+        self._type = None
+        self._lemmas = []
+        self._definitions = []
+        self._owner = None
 
     @property
-    def iri(self) -> URIRef:
-        """Return the iri associated with this named entity."""
-        return self._iri
-
-    @property
-    def id(self) -> IdentifiedNode:
+    def id(self) -> str:
+        """Return the id of the entity."""
         return self._id
 
+    @property
+    def iri(self):
+        """Return the IRI associated with the entity."""
+        return f"http://www.istat.it/metastat/{self.id}"
+
+    @property
+    def type(self) -> str:
+        """Return the type of this entity."""
+        return self._type
+
+    @property
+    def lemma(self) -> list[LiteralValue]:
+        """Return the list of lemmas for this entity."""
+        return self._lemmas
+
+    @property
+    def definition(self) -> list[LiteralValue]:
+        """Return the list of definitions for this entity."""
+        return self._definitions
+
+    @property
+    def owner(self) -> Owner:
+        """Return the process owner for this entity."""
+        return self._owner
+
     @classmethod
-    def from_dict(cls, data: dict, **kwargs) -> Node:
-        ent = NamedEntity(data["id"])  # noqa
-        ent.type = data["type"]
-        if "owner" in data:
-            ownerData = data["owner"]
-            owner = cast(Owner, Owner.from_dict(data=ownerData))
-            ent.owner = owner
+    def from_dict(cls, data: dict, **kwargs) -> NamedEntity:
+        entity = NamedEntity(data["id"])
+        entity._type = data["type"]
         if "lemma" in data:
-            lemma_pred_dict = {"iri": "http://www.w3.org/2000/01/rdf-schema#label"}
-            for a in data["lemma"]:
-                ant = cast(Annotation, Annotation.from_dict(a, subject=ent.to_dict(), predicate=lemma_pred_dict))
-                ent.lemmas.append(ant)
+            entity._lemmas.extend([LiteralValue.from_dict(l) for l in data["lemma"]])
         if "definition" in data:
-            definition_pred_dict = {"iri": "http://www.w3.org/2000/01/rdf-schema#comment"}
-            for a in data["definition"]:
-                ant = cast(Annotation, Annotation.from_dict(a, subject=ent.to_dict(), predicate=definition_pred_dict))
-                ent.definitions.append(ant)
-        return ent
+            entity._definitions.extend([LiteralValue.from_dict(d) for d in data["definition"]])
+        if "owner" in data:
+            entity._owner = Owner.from_dict(data["owner"])
+        return entity
 
     def to_dict(self, deep: bool = False) -> dict:
         res = {
@@ -110,201 +195,14 @@ class NamedEntity(Node):
         }
         if deep:
             res |= {
-                "lemma": [a.to_dict() for a in self.lemmas],
-                "definition": [a.to_dict() for a in self.definitions],
-                "owner": self.owner.to_dict(),
+                "lemma": [a.to_dict() for a in self.lemma],
+                "definition": [a.to_dict() for a in self.definition],
+                "owner": self.owner.to_dict() if self.owner else {},
             }
         return res
 
-    def n3(self) -> str:
-        return self.iri.n3(K_GRAPH.namespace_manager)
-
-    def __eq__(self, other: Node) -> bool:
-        return super().__eq__(other) and self.id == cast(NamedEntity, other).id
+    def __eq__(self, other) -> bool:
+        return super().__eq__(other) and self.id == other.id
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.id}, \"{self.type}\")"
-
-class Annotation(Node):
-    """
-    Represent an annotation assertion.
-    """
-
-    def __init__(self, subject: NamedEntity, predicate: URIRef, object: Node) -> None:
-        """Initialize the annotation."""
-        self._subject = subject
-        self._predicate = predicate
-        self._object = object
-
-    @property
-    def subject(self) -> NamedEntity:
-        """Return the annotation subject."""
-        return self._subject
-
-    @property
-    def predicate(self) -> URIRef:
-        """Return the annotation predicate."""
-        return self._predicate
-
-    @property
-    def object(self) -> Node:
-        """Return the annotation object."""
-        return self._object
-
-    @classmethod
-    def from_dict(cls, data: dict, **kwargs) -> Node:
-        s = kwargs["subject"]
-        p = kwargs["predicate"]["iri"]
-        v = data["value"]
-        l = data["lang"]
-
-        sub = NamedEntity.from_dict(s)
-        prop = URIRef(p)
-
-        if isinstance(v, dict) and "id" in v:
-            obj = NamedEntity.from_dict(v) if "iri" in v else AnonymousEntity.from_dict(v)
-        else:
-            obj = LiteralValue.from_dict({"value": v, "language": l})
-        return Annotation(cast(NamedEntity, sub), prop, obj)
-
-    def to_dict(self, deep: bool = False) -> dict:
-        return {
-            "property": self.predicate,
-            "value": self.object.to_dict()
-        }
-
-    def n3(self) -> str:
-        sub = self.subject.n3()
-        pred = self.predicate.n3()
-        obj = self.object.n3()
-        return f'{sub} {pred} {obj}'
-
-    def __eq__(self, other: Node) -> bool:
-        return (
-            self.__class__ == other.__class__
-            and self.subject == cast(Annotation, other).subject
-            and self.predicate == cast(Annotation, other).predicate
-            and self.object == cast(Annotation, other).object
-        )
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({self.subject}, {self.predicate}, {self.object})"
-
-
-class LiteralValue(Node):
-    """
-    Represent a literal value associated with an annotation assertion.
-    """
-
-    def __init__(self, value: str, language: Optional[str] = None,
-                 ) -> None:
-        """Initialize the literal."""
-        super().__init__()
-        self._value = value
-        self._language = language
-        self._datatype = None
-        # Check that literal is well-formed
-        if self._language is not None and self._datatype is not None:
-            raise ValueError("Literals with a datatype cannot have a language tag.")
-
-    @property
-    def value(self) -> str:
-        """Return the value of this literal."""
-        return self._value
-
-    @property
-    def language(self) -> Optional[str]:
-        """Return the language tag of this literal, or `None` if there is no tag."""
-        return self._language
-
-    @property
-    def datatype(self) -> Optional[Union[URIRef, str]]:
-        """Return the datatype of this literal, or `None` if there is no datatype."""
-        return self._datatype
-
-    @classmethod
-    def from_dict(cls, data: dict, **kwargs) -> Node:
-        return cls(data["value"], data["language"])  # noqa
-
-    def to_dict(self, deep: bool = False) -> dict:
-        return {
-            "value": self.value,
-            "language": self.language,
-        }
-
-    def n3(self) -> str:
-        return Literal(self.value, self.language, self.datatype).n3(K_GRAPH.namespace_manager)
-
-    def __eq__(self, other: Node) -> bool:
-        return (
-            super().__eq__(other)
-            and self.value == cast(LiteralValue, other).value
-            and self.language == cast(LiteralValue, other).language
-        )
-
-    def __repr__(self) -> str:
-        if self.language:
-            return f"{self.__class__.__name__}(\"{self.value}\"@{self.language})"
-        else:
-            return f"{self.__class__.__name__}(\"{self.value}\"^^{self.datatype})"
-
-class AnonymousEntity(Node):
-    """
-    Represents entities not identified by an IRI (i.e. blank nodes in RDF).
-    """
-
-    def __init__(self, id_: str, bnode: Union[BNode, str]) -> None:
-        """Initialize the anonymous entity."""
-        super().__init__()
-        self._id = id_
-        self._bnode = bnode if isinstance(bnode, BNode) else BNode(bnode)
-
-    @property
-    def bnode(self) -> BNode:
-        """Returns the blank node associated with this entity."""
-        return self._bnode
-
-    @property
-    def name(self) -> IdentifiedNode:
-        return self.bnode
-
-    @classmethod
-    def from_dict(cls, data: dict, **kwargs) -> Node:
-        ent = NamedEntity(data["id"], data["bnode"])  # noqa
-        ent = NamedEntity(data["id"])  # noqa
-        ent.type = data["type"]
-        owner = cast(Owner, Owner.from_dict(data))
-        ent.owner = owner
-        if "lemma" in data:
-            lemma_pred_dict = {"iri": "http://www.w3.org/2000/01/rdf-schema#label"}
-            for a in data["lemma"]:
-                ant = cast(Annotation, Annotation.from_dict(a, subject=ent.to_dict(), predicate=lemma_pred_dict))
-                ent.lemmas.append(ant)
-        if "definition" in data:
-            definition_pred_dict = {"iri": "http://www.w3.org/2000/01/rdf-schema#comment"}
-            for a in data["definition"]:
-                ant = cast(Annotation, Annotation.from_dict(a, subject=ent.to_dict(), predicate=definition_pred_dict))
-                ent.definitions.append(ant)
-        return ent
-
-    def to_dict(self, deep: bool = False) -> dict:
-        res = {
-            "id": self.id,
-            "type": self.type,
-        }
-        if deep:
-            res |= {
-                "lemma": [a.to_dict() for a in self.lemmas],
-                "definition": [a.to_dict() for a in self.definitions],
-                "owner": self.owner.to_dict(),
-            }
-        return res
-
-    def n3(self) -> str:
-        return self.bnode.n3(K_GRAPH.namespace_manager)
-
-    def __eq__(self, other: Node) -> bool:
-        return super().__eq__(other) and self.bnode == cast(AnonymousEntity, other).bnode
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({self.id}, \"{self.bnode}\")"

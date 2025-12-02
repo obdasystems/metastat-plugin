@@ -32,16 +32,13 @@
 #                                                                        #
 ##########################################################################
 
+
 from abc import (
     ABCMeta,
     abstractmethod,
 )
 import json
-import textwrap
-from typing import (
-    Any,
-    cast,
-)
+from typing import Any
 
 from PyQt5 import (
     QtCore,
@@ -49,15 +46,22 @@ from PyQt5 import (
     QtNetwork,
     QtWidgets,
 )
-from rdflib import Graph
-from rdflib.namespace import NamespaceManager
-
 from eddy.core.commands.iri import CommandIRIAddAnnotationAssertion
 from eddy.core.datatypes.graphol import Item
 from eddy.core.functions.misc import first
 from eddy.core.functions.signals import connect
-
+from eddy.core.metadata import (
+    Entity,
+    MetadataRequest,
+    Repository,
+)
 from eddy.core.output import getLogger
+from eddy.core.owl import (
+    AnnotationAssertion,
+    AnnotationAssertionProperty,
+    IRI,
+    Literal,
+)
 from eddy.ui.fields import (
     ComboBox,
     IntegerField,
@@ -65,13 +69,7 @@ from eddy.ui.fields import (
     TextField,
 )
 
-from eddy.core.metadata import (
-    Entity,
-    MetadataRequest,
-    Repository,
-)
-
-from .core import K_GRAPH, NamedEntity, LiteralValue
+from .core import NamedEntity, LiteralValue
 
 LOGGER = getLogger()
 
@@ -232,6 +230,7 @@ class MetastatWidget(QtWidgets.QWidget):
 
         self.getData()
         self.redraw()
+
     #############################################
     #   PROPERTIES
     #################################
@@ -358,9 +357,9 @@ class MetastatWidget(QtWidgets.QWidget):
         # There is currently no support for unbinding a namespace in rdflib,
         # so we have to resort to recreating it from scratch.
         # See: https://github.com/RDFLib/rdflib/issues/1932
-        K_GRAPH.namespace_manager = NamespaceManager(Graph(), bind_namespaces='none')
-        for prefix, ns in self.project.prefixDictItems():
-            K_GRAPH.bind(prefix, ns, override=True)
+        #K_GRAPH.namespace_manager = NamespaceManager(Graph(), bind_namespaces='none')
+        #for prefix, ns in self.project.prefixDictItems():
+        #    K_GRAPH.bind(prefix, ns, override=True)
         self.redraw()
 
     @QtCore.pyqtSlot()
@@ -381,29 +380,6 @@ class MetastatWidget(QtWidgets.QWidget):
     def onRequestCompleted(self):
         """
         Executed when a metadata request has completed to update the widget.
-
-        reply = self.sender()
-        try:
-            reply.deleteLater()
-            if reply.isFinished() and reply.error() == QtNetwork.QNetworkReply.NoError:
-                data = json.loads(str(reply.readAll(), encoding='utf-8'))
-                entities = [NamedEntity.from_dict(d) for d in data if "iri" in d]
-                for e in entities:
-                    e.repository = reply.request().attribute(MetadataRequest.RepositoryAttribute)
-                    try:
-                        itemText = K_GRAPH.namespace_manager.curie(e.iri, generate=False)
-                    except KeyError:
-                        itemText = e.iri
-                    item = QtGui.QStandardItem(self.iconConcept, f"{itemText}")
-                    item.setData(e)
-                    self.model.appendRow(item)
-                self.session.statusBar().showMessage('Metadata fetch completed')
-            elif reply.isFinished() and reply.error() != QtNetwork.QNetworkReply.NoError:
-                msg = f'Failed to retrieve metadata: {reply.errorString()}'
-                LOGGER.warning(msg)
-                self.session.statusBar().showMessage(msg)
-        except Exception as e:
-            LOGGER.error(f'Failed to retrieve metadata: {e}')
         """
         reply = self.sender()
         try:
@@ -435,14 +411,6 @@ class MetastatWidget(QtWidgets.QWidget):
         """
         Redraw the content of the widget.
         """
-        for index in range(self.model.rowCount()):
-            item = self.model.item(index, 0)
-            if isinstance(item.data(), NamedEntity):
-                try:
-                    itemText = K_GRAPH.namespace_manager.curie(item.data().id, generate=False)
-                except ValueError:
-                    itemText = item.data().id
-                item.setText(itemText)
         self.entityview.update()
         self.details.redraw()
 
@@ -451,7 +419,7 @@ class MetastatWidget(QtWidgets.QWidget):
         Returns the recommended size for this widget.
         :rtype: QtCore.QSize
         """
-        return QtCore.QSize(216, 266)
+        return QtCore.QSize(266, 216)
 
 
 class MetastatView(QtWidgets.QListView):
@@ -522,43 +490,15 @@ class MetastatView(QtWidgets.QListView):
                     index = self.model().mapToSource(index)
                     item = model.itemFromIndex(index)
                     data = item.data()
-                    if data:
-                        if isinstance(data, NamedEntity):
-                            mimeData = QtCore.QMimeData()
-                            mimeData.setText(str(Item.ConceptNode.value))
-                            buf = QtCore.QByteArray()
-                            buf.append(data.id)
-                            mimeData.setData(str(Item.ConceptNode.value), buf)
-                            drag = QtGui.QDrag(self)
-                            drag.setMimeData(mimeData)
-                            drag.exec_(QtCore.Qt.CopyAction)
-
-                            # Add assertion indicating source
-                            from eddy.core.owl import IRI, AnnotationAssertion, AnnotationAssertionProperty, Literal
-                            subj = self.session.project.getIRI("http://www.istat.it/metastat/"+str(data.id))  # type: IRI
-                            pred = self.session.project.getIRI('urn:x-graphol:origin')
-                            #loc = QtCore.QUrl(data.repository.uri)
-                            #loc.setPath(f'{loc.path()}/entities/{data.id}'.replace('//', '/'))
-                            loc = "metastat"
-                            obj = IRI(loc)
-                            ast = AnnotationAssertion(subj, pred, obj)
-                            cmd = CommandIRIAddAnnotationAssertion(self.session.project, subj, ast)
-                            self.session.undostack.push(cmd)
-                            for l in data.lemmas:
-                                #subj = self.session.project.getIRI(str(data.id))  # type: IRI
-                                pred = AnnotationAssertionProperty.Label.value
-                                literal = cast(LiteralValue, l.object)
-                                ast = AnnotationAssertion(subj, pred, literal.value, literal.datatype, literal.language)
-                                cmd = CommandIRIAddAnnotationAssertion(self.session.project, subj, ast)
-                                self.session.undostack.push(cmd)
-                            for d in data.definitions:
-                                #subj = self.session.project.getIRI(str(data.id))  # type: IRI
-                                pred = AnnotationAssertionProperty.Comment.value
-                                literal = cast(LiteralValue, d.object)
-                                ast = AnnotationAssertion(subj, pred, literal.value, literal.datatype, literal.language)
-                                cmd = CommandIRIAddAnnotationAssertion(self.session.project, subj, ast)
-                                self.session.undostack.push(cmd)
-
+                    if data and isinstance(data, NamedEntity):
+                        mimeData = QtCore.QMimeData()
+                        buf = QtCore.QByteArray()
+                        buf.append(json.dumps(data.to_dict(deep=True)))
+                        mimeData.setData('application/json+metastat', buf)
+                        mimeData.setText(data.id)
+                        drag = QtGui.QDrag(self)
+                        drag.setMimeData(mimeData)
+                        drag.exec_(QtCore.Qt.DropAction.CopyAction)
         super().mouseMoveEvent(mouseEvent)
 
     def paintEvent(self, event: QtGui.QPaintEvent):
@@ -600,7 +540,7 @@ class MetastatFilterProxyModel(QtCore.QSortFilterProxyModel):
         self.filter_iri = ""
         self.filter_type = ""
         self.filter_lemma = ""
-        self.filter_description = ""
+        self.filter_definition = ""
         self.filter_owner = ""
 
     def setIriFilter(self, text):
@@ -617,7 +557,7 @@ class MetastatFilterProxyModel(QtCore.QSortFilterProxyModel):
         self.invalidateFilter()
 
     def setDescriptionFilter(self, text):
-        self.filter_description = text
+        self.filter_definition = text
         self.invalidateFilter()
 
     def setOwnerFilter(self, text):
@@ -632,8 +572,8 @@ class MetastatFilterProxyModel(QtCore.QSortFilterProxyModel):
             if isinstance(data, NamedEntity):
                 iri = data.iri
                 varType = data.type
-                lemmas = data.lemmas
-                descriptions = data.definitions
+                lemmas = data.lemma
+                definitions = data.definition
                 owner = data.owner
             else:
                 return False
@@ -649,20 +589,20 @@ class MetastatFilterProxyModel(QtCore.QSortFilterProxyModel):
         if self.filter_lemma:
             lemma_contains = False
             for l in lemmas:
-                if self.filter_lemma.lower() in l.object.value.lower():
+                if self.filter_lemma.lower() in l.value.lower():
                     lemma_contains = True
             if not lemma_contains:
                 return False
 
-        if self.filter_description:
+        if self.filter_definition:
             description_contains = False
-            for d in descriptions:
-                if self.filter_description.lower() in d.object.value.lower():
+            for d in definitions:
+                if self.filter_definition.lower() in d.value.lower():
                     description_contains = True
             if not description_contains:
                 return False
 
-        if self.filter_owner and self.filter_owner.lower() not in owner.lower():
+        if self.filter_owner and owner.name and self.filter_owner.lower() not in owner.name.lower():
             return False
 
         return True
@@ -1016,31 +956,17 @@ class EntityInfo(AbstractInfo):
         # ENTITY ANNOTATIONS
         while self.metadataLayout.rowCount() > 0:
             self.metadataLayout.removeRow(0)
-        for a in entity.lemmas:
-            #self.metadataLayout.addRow(Key('Property', self), String("Label", self))
-            if isinstance(a.object, LiteralValue):
-                literal = cast(LiteralValue, a.object)
-                value, lang, dtype = literal.value, literal.language, literal.datatype
-                self.metadataLayout.addRow(Key('Lemma', self), Text(value, self))
-                if lang:
-                    self.metadataLayout.addRow(Key('Language', self), String(lang, self))
-                if dtype:
-                    self.metadataLayout.addRow(Key('Type', self), String(dtype.n3(), self))
-            else:
-                self.metadataLayout.addRow(Key('Lemma', self), String(a.object.n3(), self))
+        for lemma in entity.lemma:
+            value, lang = lemma.value, lemma.lang
+            self.metadataLayout.addRow(Key('Lemma', self), Text(value, self))
+            if lang:
+                self.metadataLayout.addRow(Key('Language', self), String(lang, self))
             self.metadataLayout.addItem(QtWidgets.QSpacerItem(10, 2))
-        for a in entity.definitions:
-            #self.metadataLayout.addRow(Key('Property', self), String("Comment", self))
-            if isinstance(a.object, LiteralValue):
-                literal = cast(LiteralValue, a.object)
-                value, lang, dtype = literal.value, literal.language, literal.datatype
-                self.metadataLayout.addRow(Key('Description', self), Text(value, self))
-                if lang:
-                    self.metadataLayout.addRow(Key('Language', self), String(lang, self))
-                if dtype:
-                    self.metadataLayout.addRow(Key('Type', self), String(dtype.n3(), self))
-            else:
-                self.metadataLayout.addRow(Key('Description', self), String(a.object.n3(), self))
+        for definition in entity.definition:
+            value, lang = definition.value, definition.lang
+            self.metadataLayout.addRow(Key('Description', self), Text(value, self))
+            if lang:
+                self.metadataLayout.addRow(Key('Language', self), String(lang, self))
             self.metadataLayout.addItem(QtWidgets.QSpacerItem(10, 2))
 
 class EmptyInfo(QtWidgets.QTextEdit):
@@ -1061,9 +987,7 @@ class EmptyInfo(QtWidgets.QTextEdit):
         painter.save()
         painter.setPen(self.palette().placeholderText().color())
         fm = self.fontMetrics()
-        bgMsg = textwrap.dedent("""
-        Click on a list item to see more info.
-        """)
+        bgMsg = 'Click on a list item to see more info.'
         elided_text = fm.elidedText(bgMsg, QtCore.Qt.ElideRight, self.viewport().width())
         painter.drawText(self.viewport().rect(), QtCore.Qt.AlignCenter, elided_text)
         painter.restore()
@@ -1081,17 +1005,15 @@ class EntityTypeDialog(QtWidgets.QDialog):
         individual_rb = QtWidgets.QRadioButton("Individual")
 
         self.button_group = QtWidgets.QButtonGroup()
-        self.button_group.addButton(class_rb, 65537)
-        self.button_group.addButton(object_property_rb, 65539)
-        self.button_group.addButton(data_property_rb, 65538)
-        self.button_group.addButton(individual_rb, 65541)
+        self.button_group.addButton(class_rb, Item.ConceptNode)
+        self.button_group.addButton(object_property_rb, Item.RoleNode)
+        self.button_group.addButton(data_property_rb, Item.AttributeNode)
+        self.button_group.addButton(individual_rb, Item.IndividualNode)
         for rb in [class_rb, object_property_rb, data_property_rb, individual_rb]:
             rb.toggled.connect(self.update_buttons)
             layout.addWidget(rb)
 
-        self.btns = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
-        )
+        self.btns = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
         layout.addWidget(self.btns)
         self.btns.accepted.connect(self.accept)
         self.btns.rejected.connect(self.reject)

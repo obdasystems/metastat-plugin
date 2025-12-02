@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-
 ##########################################################################
 #                                                                        #
 #  Eddy: a graphical editor for the specification of Graphol ontologies  #
@@ -32,18 +31,33 @@
 #                                                                        #
 ##########################################################################
 
+
+import json
+
 from PyQt5 import (
     QtCore,
     QtGui,
+    QtWidgets,
 )
-
+from eddy.core.commands.iri import CommandIRIAddAnnotationAssertion
+from eddy.core.commands.nodes import CommandNodeAdd
+from eddy.core.datatypes.graphol import Item
+from eddy.core.datatypes.misc import DiagramMode
+from eddy.core.diagram import Diagram
+from eddy.core.functions.misc import snap
 from eddy.core.functions.signals import connect, disconnect
-from eddy.core.metadata import K_REPO_MONITOR
 from eddy.core.output import getLogger
+from eddy.core.owl import (
+    AnnotationAssertion,
+    AnnotationAssertionProperty,
+    IRI,
+    Literal,
+)
 from eddy.core.plugin import AbstractPlugin
 from eddy.ui.dock import DockWidget
-from .widgets import MetastatWidget  # noqa
 
+from .core import NamedEntity, LiteralValue
+from .widgets import EntityTypeDialog, MetastatWidget  # noqa
 
 LOGGER = getLogger()
 
@@ -80,6 +94,89 @@ class MetastatPlugin(AbstractPlugin):
     #   SLOTS
     #################################
 
+    @QtCore.pyqtSlot(QtWidgets.QGraphicsScene)
+    def onDiagramAdded(self, diagram):
+        """
+        Executed when a diagram is added to the project.
+        :typw diagram: Diagram
+        """
+        self.debug('Connecting to diagram: %s', diagram.name)
+        connect(diagram.sgnDragDropEvent, self.onDiagramDragDropEvent)
+        connect(diagram.sgnModeChanged, self.onDiagramModeChanged)
+
+    @QtCore.pyqtSlot(QtWidgets.QGraphicsScene, QtWidgets.QGraphicsSceneDragDropEvent)
+    def onDiagramDragDropEvent(self, diagram, event: QtWidgets.QGraphicsSceneDragDropEvent):
+        # Show entity type selection diagram
+        if event.mimeData().hasFormat('application/json+metastat'):
+            dialog = EntityTypeDialog(event.mimeData().text(), self.project.session)
+            if dialog.exec_() == QtWidgets.QDialog.Accepted:
+                entity = NamedEntity.from_dict(json.loads(event.mimeData().data('application/json+metastat').data()))
+                self.session.undostack.beginMacro('metastat entity drag&drop')
+                subject = self.session.project.getIRI('http://www.istat.it/metastat/' + str(entity.id))
+                predicate = self.session.project.getIRI('urn:x-graphol:origin')
+                object_ = IRI('http://www.istat.it/metastat/')
+                ast = AnnotationAssertion(subject, predicate, object_)
+                cmd = CommandIRIAddAnnotationAssertion(self.session.project, subject, ast)
+                self.session.undostack.push(cmd)
+
+                # Add metastat prefix if not present
+                if not any([ns == 'http://www.istat.it/metastat/' for _, ns in self.project.prefixDictItems()]):
+                    self.project.setPrefix('metastat', 'http://www.istat.it/metastat/')
+
+                # Add lemmas for entity as rdfs:label
+                for lemma in entity.lemma:
+                    ast = AnnotationAssertion(
+                        subject,
+                        AnnotationAssertionProperty.Label.value,
+                        lemma.value,
+                        None,
+                        lemma.lang,
+                    )
+                    cmd = CommandIRIAddAnnotationAssertion(self.session.project, subject, ast)
+                    self.session.undostack.push(cmd)
+
+                # Add definitions for entity as rdfs:comment
+                for definition in entity.definition:
+                    ast = AnnotationAssertion(
+                        subject,
+                        AnnotationAssertionProperty.Comment.value,
+                        definition.value,
+                        None,
+                        definition.lang,
+                    )
+                    cmd = CommandIRIAddAnnotationAssertion(self.session.project, subject, ast)
+                    self.session.undostack.push(cmd)
+
+                # Add node with selected type
+                snapToGrid = self.session.action('toggle_grid').isChecked()
+                node = diagram.factory.create(Item.valueOf(str(dialog.button_group.checkedId())))
+                node.iri = subject
+                node.setPos(snap(event.scenePos(), Diagram.GridSize, snapToGrid))
+                self.session.undostack.push(CommandNodeAdd(diagram, node))
+                self.session.undostack.endMacro()
+            else:
+                event.setDropAction(QtCore.Qt.DropAction.IgnoreAction)
+                event.ignore()
+
+    @QtCore.pyqtSlot(DiagramMode)
+    def onDiagramModeChanged(self, mode):
+        """
+        Executed when the diagram operational mode changes.
+        :type mode: DiagramMode
+        """
+        # TODO: check if there are action to do on mode change
+        pass
+
+    @QtCore.pyqtSlot(QtWidgets.QGraphicsScene)
+    def onDiagramRemoved(self, diagram):
+        """
+        Executed when a diagram is removed to the project.
+        :typw diagram: Diagram
+        """
+        self.debug('Disconnecting from diagram: %s', diagram.name)
+        disconnect(diagram.sgnDragDropEvent, self.onDiagramDragDropEvent)
+        disconnect(diagram.sgnModeChanged, self.onDiagramModeChanged)
+
     @QtCore.pyqtSlot()
     def onSessionReady(self):
         """
@@ -88,10 +185,16 @@ class MetastatPlugin(AbstractPlugin):
         widget = self.widget('metastat')  # type: MetastatWidget
         # CONNECT TO PROJECT SPECIFIC SIGNALS
         self.debug('Connecting to project: %s', self.project.name)
-        connect(self.project.sgnPrefixAdded, widget.onPrefixChanged)
-        connect(self.project.sgnPrefixModified, widget.onPrefixChanged)
-        connect(self.project.sgnPrefixRemoved, widget.onPrefixChanged)
-        widget.onPrefixChanged()
+        connect(self.project.sgnDiagramAdded, self.onDiagramAdded)
+        connect(self.project.sgnDiagramRemoved, self.onDiagramRemoved)
+        #connect(self.project.sgnPrefixAdded, widget.onPrefixChanged)
+        #connect(self.project.sgnPrefixModified, widget.onPrefixChanged)
+        #connect(self.project.sgnPrefixRemoved, widget.onPrefixChanged)
+        for diagram in self.project.diagrams():
+            self.debug('Connecting to diagram: %s', diagram.name)
+            connect(diagram.sgnDragDropEvent, self.onDiagramDragDropEvent)
+            connect(diagram.sgnModeChanged, self.onDiagramModeChanged)
+        #widget.onPrefixChanged()
 
     @QtCore.pyqtSlot()
     def doUpdateState(self):
@@ -108,12 +211,18 @@ class MetastatPlugin(AbstractPlugin):
         """
         Executed whenever the plugin is going to be destroyed.
         """
+        # DISCONNECT FROM ALL THE DIAGRAMS
+        for diagram in self.project.diagrams():
+            self.debug('Disconnecting from diagrams: %s', diagram.name)
+            disconnect(diagram.sgnDragDropEvent, self.onDiagramDragDropEvent)
+            disconnect(diagram.sgnModeChanged, self.onDiagramModeChanged)
+
         # DISCONNECT FROM CURRENT PROJECT
         widget = self.widget('metastat')  # type: MetastatWidget
         self.debug('Disconnecting from project: %s', self.project.name)
-        disconnect(self.project.sgnPrefixAdded, widget.onPrefixChanged)
-        disconnect(self.project.sgnPrefixModified, widget.onPrefixChanged)
-        disconnect(self.project.sgnPrefixRemoved, widget.onPrefixChanged)
+        #disconnect(self.project.sgnPrefixAdded, widget.onPrefixChanged)
+        #disconnect(self.project.sgnPrefixModified, widget.onPrefixChanged)
+        #disconnect(self.project.sgnPrefixRemoved, widget.onPrefixChanged)
 
         # DISCONNECT FROM ACTIVE SESSION
         self.debug('Disconnecting from active session')
