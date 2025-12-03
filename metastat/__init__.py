@@ -28,10 +28,8 @@ from .model import (
     LiteralValue,
     NamedEntity,
 )
-from .widgets import (
-    EntityTypeDialog,
-    MetastatWidget,
-)
+from .widgets import MetastatWidget
+from .dialogs import EntityTypeDialog
 
 LOGGER = getLogger()
 
