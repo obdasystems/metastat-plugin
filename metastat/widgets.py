@@ -180,15 +180,15 @@ class MetastatWidget(QtWidgets.QWidget):
         connect(self.entityview.activated, self.onItemActivated)
         connect(self.entityview.doubleClicked, self.onItemDoubleClicked)
         connect(self.entityview.pressed, self.onItemPressed)
-        connect(self.search.textChanged, self.filterIri)
+        connect(self.search.textChanged, self.doFilterIRI)
         connect(self.search.returnPressed, self.onReturnPressed)
-        connect(self.type.textChanged, self.filterType)
+        connect(self.type.textChanged, self.doFilterType)
         connect(self.type.returnPressed, self.onReturnPressed)
-        connect(self.lemma.textChanged, self.filterLemma)
+        connect(self.lemma.textChanged, self.doFilterLemma)
         connect(self.lemma.returnPressed, self.onReturnPressed)
-        connect(self.description.textChanged, self.filterDescription)
+        connect(self.description.textChanged, self.doFilterDescription)
         connect(self.description.returnPressed, self.onReturnPressed)
-        connect(self.owner.textChanged, self.filterOwner)
+        connect(self.owner.textChanged, self.doFilterOwner)
         connect(self.owner.returnPressed, self.onReturnPressed)
         # connect(self.sgnItemActivated, self.session.doFocusItem)
         # connect(self.sgnItemDoubleClicked, self.session.doFocusItem)
@@ -283,32 +283,38 @@ class MetastatWidget(QtWidgets.QWidget):
                 #self.details.repository = item.data().repository
                 self.sgnItemDoubleClicked.emit(item)
                 self.details.stack()
-    def filterIri(self, text):
 
+    @QtCore.pyqtSlot(str)
+    def doFilterIRI(self, text):
+        """Executed to filter items in the treeview by IRI."""
         self.proxy.setIriFilter(text)
         self.details.entity = None
         self.details.stack()
 
-    def filterType(self, text):
-
+    @QtCore.pyqtSlot(str)
+    def doFilterType(self, text):
+        """Executed to filter items in the treeview by type."""
         self.proxy.setTypeFilter(text)
         self.details.entity = None
         self.details.stack()
 
-    def filterLemma(self, text):
-
+    @QtCore.pyqtSlot(str)
+    def doFilterLemma(self, text):
+        """Executed to filter items in the treeview by lemma."""
         self.proxy.setLemmaFilter(text)
         self.details.entity = None
         self.details.stack()
 
-    def filterDescription(self, text):
-
+    @QtCore.pyqtSlot(str)
+    def doFilterDescription(self, text):
+        """Executed to filter items in the treeview by description."""
         self.proxy.setDescriptionFilter(text)
         self.details.entity = None
         self.details.stack()
 
-    def filterOwner(self, text):
-
+    @QtCore.pyqtSlot(str)
+    def doFilterOwner(self, text):
+        """Executed to filter items in the treeview by owner."""
         self.proxy.setOwnerFilter(text)
         self.details.entity = None
         self.details.stack()
