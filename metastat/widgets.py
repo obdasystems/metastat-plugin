@@ -69,7 +69,7 @@ from eddy.ui.fields import (
     TextField,
 )
 
-from .core import NamedEntity, LiteralValue
+from .model import NamedEntity
 
 LOGGER = getLogger()
 

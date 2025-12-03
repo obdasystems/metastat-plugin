@@ -56,8 +56,14 @@ from eddy.core.owl import (
 from eddy.core.plugin import AbstractPlugin
 from eddy.ui.dock import DockWidget
 
-from .core import NamedEntity, LiteralValue
-from .widgets import EntityTypeDialog, MetastatWidget  # noqa
+from .model import (
+    LiteralValue,
+    NamedEntity,
+)
+from .widgets import (
+    EntityTypeDialog,
+    MetastatWidget,
+)
 
 LOGGER = getLogger()
 
