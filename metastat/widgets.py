@@ -44,6 +44,10 @@ class MetastatWidget(QtWidgets.QWidget):
     """
     This class implements the metadata importer used to search external metadata sources.
     """
+    CLASSIFICATION_TYPE_COLOR = QtGui.QColor("#E6E6FA")
+    UNIT_TYPE_COLOR = QtGui.QColor("#CFFFE5")
+    VARIABLE_COLOR = QtGui.QColor("#FDFD96")
+
     sgnItemActivated = QtCore.pyqtSignal(QtGui.QStandardItem)
     sgnItemClicked = QtCore.pyqtSignal(QtGui.QStandardItem)
     sgnItemDoubleClicked = QtCore.pyqtSignal(QtGui.QStandardItem)
@@ -58,15 +62,24 @@ class MetastatWidget(QtWidgets.QWidget):
 
         self.plugin = plugin
         self.settings = QtCore.QSettings()
-        self.variableIcon = QtGui.QPixmap(18, 18)
-        self.variableIcon.fill(QtGui.QColor("#FDFD96"))
-        self.variableIcon = QtGui.QIcon(self.variableIcon)
-        self.unitTypeIcon = QtGui.QPixmap(18, 18)
-        self.unitTypeIcon.fill(QtGui.QColor("#CFFFE5"))
-        self.unitTypeIcon = QtGui.QIcon(self.unitTypeIcon)
-        self.classificationIcon = QtGui.QPixmap(18, 18)
-        self.classificationIcon.fill(QtGui.QColor("#E6E6FA"))
-        self.classificationIcon = QtGui.QIcon(self.classificationIcon)
+        self.variablePixmap = QtGui.QPixmap(18, 18)
+        self.variablePixmap.fill(self.VARIABLE_COLOR)
+        variablePainter = QtGui.QPainter(self.variablePixmap)
+        variablePainter.setPen(QtCore.Qt.gray)
+        variablePainter.drawText(self.variablePixmap.rect(), QtCore.Qt.AlignCenter, 'V')
+        self.variableIcon = QtGui.QIcon(self.variablePixmap)
+        self.unitTypePixmap = QtGui.QPixmap(18, 18)
+        self.unitTypePixmap.fill(self.UNIT_TYPE_COLOR)
+        unitTypePainter = QtGui.QPainter(self.unitTypePixmap)
+        unitTypePainter.setPen(QtCore.Qt.gray)
+        unitTypePainter.drawText(self.unitTypePixmap.rect(), QtCore.Qt.AlignCenter, 'U')
+        self.unitTypeIcon = QtGui.QIcon(self.unitTypePixmap)
+        self.classificationPixmap = QtGui.QPixmap(18, 18)
+        self.classificationPixmap.fill(self.CLASSIFICATION_TYPE_COLOR)
+        classificationPainter = QtGui.QPainter(self.classificationPixmap)
+        classificationPainter.setPen(QtCore.Qt.gray)
+        classificationPainter.drawText(self.unitTypePixmap.rect(), QtCore.Qt.AlignCenter, 'Cl')
+        self.classificationIcon = QtGui.QIcon(self.classificationPixmap)
 
         self.search = StringField(self)
         self.search.setAcceptDrops(False)
