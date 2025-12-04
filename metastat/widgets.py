@@ -37,6 +37,7 @@ from .settings import (
     K_REPO_MONITOR,
     Repository,
 )
+from .style import stylesheet
 
 LOGGER = getLogger()
 
@@ -193,19 +194,7 @@ class MetastatWidget(QtWidgets.QWidget):
 
         self.setContentsMargins(0, 0, 0, 0)
         self.setMinimumWidth(216)
-        self.setStyleSheet("""
-            QLineEdit,
-            QLineEdit:editable,
-            QLineEdit:hover,
-            QLineEdit:pressed,
-            QLineEdit:focus {
-              border: none;
-              border-radius: 0;
-              background: #FFFFFF;
-              color: #000000;
-              padding: 4px 4px 4px 4px;
-            }
-        """)
+        self.setStyleSheet(stylesheet)
 
         connect(self.repoCombobox.currentIndexChanged, self.onRepositoryChanged)
         connect(self.repoButton.clicked, self.doEditRepositories)
