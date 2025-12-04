@@ -60,7 +60,7 @@ class RepositoryManagerDialog(QtWidgets.QDialog, HasWidgetSystem):
         """Initialize the repository manager dialog."""
         super().__init__(parent)
 
-        table = QtWidgets.QTableWidget(0, 2, self, objectName='repository_table_widget')  # noqa
+        table = QtWidgets.QTableWidget(0, 2, objectName='repository_table_widget')  # noqa
         table.setHorizontalHeaderLabels(['Name', 'Endpoint'])
         table.horizontalHeader().setStretchLastSection(True)
         table.horizontalHeader().setSectionsClickable(False)
@@ -71,49 +71,52 @@ class RepositoryManagerDialog(QtWidgets.QDialog, HasWidgetSystem):
         table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.addWidget(table)
 
-        delBtn = QtWidgets.QPushButton('Remove', objectName='repository_del_button')  # noqa
+        delBtn = QtWidgets.QPushButton(  # noqa
+            'Remove',
+            clicked=self.doRemoveRepository,
+            objectName='repository_del_button',
+        )
         delBtn.setEnabled(False)
-        connect(delBtn.clicked, self.doRemoveRepository)
         self.addWidget(delBtn)
 
         boxlayout = QtWidgets.QHBoxLayout()
         boxlayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        boxlayout.addWidget(delBtn)
+        boxlayout.addWidget(self.widget('repository_del_button'))
         formlayout = QtWidgets.QFormLayout()
         formlayout.addRow(self.widget('repository_table_widget'))
         formlayout.addRow(boxlayout)
 
-        groupbox = QtWidgets.QGroupBox('Repositories', self)
-        groupbox.setObjectName('repository_list_groupbox')
+        groupbox = QtWidgets.QGroupBox('Repositories', objectName='repository_list_groupbox')  # noqa
         groupbox.setLayout(formlayout)
         self.addWidget(groupbox)
 
         nameField = StringField(self, objectName='repository_name_field')
         uriField = StringField(self, objectName='repository_uri_field')
-        addBtn = QtWidgets.QPushButton('Add', objectName='repository_add_button')  # noqa
-        connect(addBtn.clicked, self.doAddRepository)
+        addBtn = QtWidgets.QPushButton(  # noqa
+            'Add',
+            clicked=self.doAddRepository,
+            objectName='repository_add_button',
+        )
         self.addWidget(nameField)
         self.addWidget(uriField)
         self.addWidget(addBtn)
 
         boxlayout = QtWidgets.QHBoxLayout()
         boxlayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        boxlayout.addWidget(addBtn)
+        boxlayout.addWidget(self.widget('repository_add_button'))
         formlayout = QtWidgets.QFormLayout()
         formlayout.addRow(QtWidgets.QLabel('Name'), nameField)
         formlayout.addRow(QtWidgets.QLabel('URI'), uriField)
         formlayout.addRow(boxlayout)
 
-        groupbox = QtWidgets.QGroupBox('Add Repository', self)
-        groupbox.setObjectName('repository_add_groupbox')
+        groupbox = QtWidgets.QGroupBox('Add Repository', objectName='repository_add_groupbox')  # noqa
         groupbox.setLayout(formlayout)
         self.addWidget(groupbox)
 
         layout = QtWidgets.QVBoxLayout()
         layout.addWidget(self.widget('repository_list_groupbox'))
         layout.addWidget(self.widget('repository_add_groupbox'))
-        widget = QtWidgets.QWidget()
-        widget.setObjectName('repositories_widget')
+        widget = QtWidgets.QWidget(objectName='repositories_widget')  # noqa
         widget.setLayout(layout)
         self.addWidget(widget)
 
