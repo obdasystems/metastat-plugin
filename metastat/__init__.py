@@ -19,6 +19,7 @@ from eddy.core.owl import (
     AnnotationAssertion,
     AnnotationAssertionProperty,
     IRI,
+    IRIRender,
     Literal,
 )
 from eddy.core.plugin import AbstractPlugin
@@ -149,6 +150,12 @@ class MetastatPlugin(AbstractPlugin):
         disconnect(diagram.sgnDragDropEvent, self.onDiagramDragDropEvent)
         disconnect(diagram.sgnModeChanged, self.onDiagramModeChanged)
 
+    @QtCore.pyqtSlot(str)
+    def onRenderingModified(self, render):
+        """Executed when the IRI rendering changes."""
+        widget = self.widget('metastat')  # type: MetastatWidget
+        widget.redraw()
+
     @QtCore.pyqtSlot()
     def onSessionReady(self):
         """
@@ -200,6 +207,7 @@ class MetastatPlugin(AbstractPlugin):
         self.debug('Disconnecting from active session')
         disconnect(self.session.sgnReady, self.onSessionReady)
         disconnect(self.session.sgnUpdateState, self.doUpdateState)
+        disconnect(self.session.sgnRenderingModified, self.onRenderingModified)
 
     def start(self):
         """
@@ -244,3 +252,5 @@ class MetastatPlugin(AbstractPlugin):
         # CONFIGURE SIGNAL/SLOTS
         connect(self.session.sgnReady, self.onSessionReady)
         connect(self.session.sgnUpdateState, self.doUpdateState)
+        connect(self.session.sgnRenderingModified, self.onRenderingModified)
+

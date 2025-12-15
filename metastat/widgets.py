@@ -21,6 +21,7 @@ from eddy.core.owl import (
     AnnotationAssertion,
     AnnotationAssertionProperty,
     IRI,
+    IRIRender,
     Literal,
 )
 from eddy.core.plugin import AbstractPlugin
@@ -42,9 +43,26 @@ from .style import stylesheet
 LOGGER = getLogger()
 
 
+def entityText(item: dict) -> str:
+    """
+    Returns the text for the response json object based on IRI render preferences.
+    """
+    settings = QtCore.QSettings()
+    rendering = IRIRender(settings.value('ontology/iri/render', IRIRender.FULL.value, str))
+    lang = settings.value('ontology/iri/render/language', 'en', str)
+
+    if rendering == IRIRender.LABEL:
+        if lang in ('en', 'it'):
+            return first(filter(lambda i: i['lang'] == lang, item['lemma']))['value']
+        else:
+            return item['lemma'][0]['value']
+    else:
+        return item['id']
+
+
 class MetastatWidget(QtWidgets.QWidget):
     """
-    This class implements the metadata importer used to search external metadata sources.
+    This class implements the widget used to browse metastat sources.
     """
     CLASSIFICATION_TYPE_COLOR = QtGui.QColor("#E6E6FA")
     UNIT_TYPE_COLOR = QtGui.QColor("#CFFFE5")
@@ -216,8 +234,8 @@ class MetastatWidget(QtWidgets.QWidget):
         # connect(self.sgnItemDoubleClicked, self.session.doFocusItem)
         # connect(self.sgnItemRightClicked, self.session.doFocusItem)
 
-        self.getData()
-        self.redraw()
+        # Trigger a repository fetch
+        self.repoCombobox.currentIndexChanged.emit(self.repoCombobox.currentIndex())
 
     #############################################
     #   PROPERTIES
@@ -403,19 +421,21 @@ class MetastatWidget(QtWidgets.QWidget):
         #    K_GRAPH.bind(prefix, ns, override=True)
         self.redraw()
 
+    @QtCore.pyqtSlot(str)
+    def onRenderingModified(self, render):
+        """
+        Executed when IRI rendering changes.
+        """
+        settings = QtCore.QSettings()
+        settings.value('ontology/iri/render', IRIRender.FULL.value)
+        self.redraw()
+
     @QtCore.pyqtSlot()
     def onReturnPressed(self):
         """
         Executed when the Return or Enter key is pressed in the search field.
         """
         self.focusNextChild()
-
-    def getData(self):
-        url = QtCore.QUrl('https://obdasys.ddns.net/metastat')
-        url.setPath(f'{url.path()}/all')
-        request = QtNetwork.QNetworkRequest(url)
-        reply = self.session.nmanager.get(request)
-        connect(reply.finished, self.onRequestCompleted)
 
     @QtCore.pyqtSlot()
     def onRequestCompleted(self):
@@ -428,13 +448,16 @@ class MetastatWidget(QtWidgets.QWidget):
             if reply.isFinished() and reply.error() == QtNetwork.QNetworkReply.NoError:
                 data = json.loads(str(reply.readAll(), encoding='utf-8'))
                 for d in data:
-                    itemText = d["id"]
-                    if d["type"] == "variable":
-                        item = QtGui.QStandardItem(self.variableIcon, f"{itemText}")
-                    elif d["type"] == "classification":
-                        item = QtGui.QStandardItem(self.classificationIcon, f"{itemText}")
-                    elif d["type"] == "unit-type":
-                        item = QtGui.QStandardItem(self.unitTypeIcon, f"{itemText}")
+                    itemText = entityText(d)
+                    if d['type'] == 'classification':
+                        item = QtGui.QStandardItem(self.classificationIcon, itemText)
+                    elif d['type'] == 'unit-type':
+                        item = QtGui.QStandardItem(self.unitTypeIcon, itemText)
+                    elif d['type'] == 'variable':
+                        item = QtGui.QStandardItem(self.variableIcon, itemText)
+                    else:
+                        LOGGER.warning(f'Unknown metastat type: {d["type"]}')
+                        continue
                     item.setData(NamedEntity.from_dict(d))
                     self.model.appendRow(item)
             elif reply.isFinished() and reply.error() != QtNetwork.QNetworkReply.NoError:
@@ -465,11 +488,11 @@ class MetastatWidget(QtWidgets.QWidget):
 
 class MetastatView(QtWidgets.QListView):
     """
-    This class implements the metadata importer list view.
+    This class implements the metastat list view.
     """
     def __init__(self, parent):
         """
-        Initialize the metadata importer list view.
+        Initialize the metastat list view.
         :type parent: MetastatWidget
         """
         super().__init__(parent)
@@ -556,6 +579,22 @@ class MetastatView(QtWidgets.QListView):
             elided_text = fm.elidedText(bgMsg, QtCore.Qt.ElideRight, self.viewport().width())
             painter.drawText(self.viewport().rect(), QtCore.Qt.AlignCenter, elided_text)
             painter.restore()
+
+    def update(self, index: QtCore.QModelIndex = None):
+        """
+        Update the view for the given index (if any).
+        """
+        if index:
+            super().update(index)
+            proxy = self.model()
+            item = proxy.sourceModel().itemFromIndex(proxy.mapToSource(index))
+            item.setText(entityText(item.data().to_dict(deep=True)))
+            super().update()
+        else:
+            for row in range(self.model().rowCount()):
+                index = self.model().index(row, 0)
+                self.update(index)
+            super().update()
 
     #############################################
     #   INTERFACE
@@ -648,11 +687,11 @@ class MetastatFilterProxyModel(QtCore.QSortFilterProxyModel):
 
 class MetastatInfoWidget(QtWidgets.QScrollArea):
     """
-    This class implements the metadata detail widget.
+    This class implements the metastat detail widget.
     """
     def __init__(self, parent: QtWidgets.QWidget) -> None:
         """
-        Initialize the metadata info box.
+        Initialize the metastat info box.
         """
         super().__init__(parent)
 
@@ -1010,7 +1049,7 @@ class EntityInfo(AbstractInfo):
 
 class EmptyInfo(QtWidgets.QTextEdit):
     """
-    This class implements the information box when there is no metadata repository.
+    This class implements the information box when there is no metastat repository.
     """
 
     #############################################
