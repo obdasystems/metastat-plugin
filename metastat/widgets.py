@@ -52,10 +52,12 @@ def entityText(item: dict) -> str:
     lang = settings.value('ontology/iri/render/language', 'en', str)
 
     if rendering == IRIRender.LABEL:
-        if lang in ('en', 'it'):
-            return first(filter(lambda i: i['lang'] == lang, item['lemma']))['value']
+        lemma = first(filter(lambda i: i['lang'] == lang, item['lemma']))
+        if lemma and lemma['value']:
+            return lemma['value']
         else:
-            return item['lemma'][0]['value']
+            LOGGER.warning('Missing lemma for lang tag: ', lang)
+            return item['id']
     else:
         return item['id']
 
