@@ -66,6 +66,7 @@ class MetastatWidget(QtWidgets.QWidget):
     """
     This class implements the widget used to browse metastat sources.
     """
+    CATEGORY_TYPE_COLOR = QtGui.QColor("#BDEBF9")
     CLASSIFICATION_TYPE_COLOR = QtGui.QColor("#E6E6FA")
     UNIT_TYPE_COLOR = QtGui.QColor("#CFFFE5")
     VARIABLE_COLOR = QtGui.QColor("#FDFD96")
@@ -106,6 +107,12 @@ class MetastatWidget(QtWidgets.QWidget):
         classificationPainter.setPen(QtCore.Qt.gray)
         classificationPainter.drawText(self.unitTypePixmap.rect(), QtCore.Qt.AlignCenter, 'Cl')
         self.classificationIcon = QtGui.QIcon(self.classificationPixmap)
+        self.categoryPixmap = QtGui.QPixmap(18, 18)
+        self.categoryPixmap.fill(self.CATEGORY_TYPE_COLOR)
+        categoryPainter = QtGui.QPainter(self.categoryPixmap)
+        categoryPainter.setPen(QtCore.Qt.gray)
+        categoryPainter.drawText(self.unitTypePixmap.rect(), QtCore.Qt.AlignCenter, 'Ct')
+        self.categoryIcon = QtGui.QIcon(self.categoryPixmap)
 
         ########################################
         # REPOSITORY FIELDS
@@ -451,7 +458,9 @@ class MetastatWidget(QtWidgets.QWidget):
                 data = json.loads(str(reply.readAll(), encoding='utf-8'))
                 for d in data:
                     itemText = entityText(d)
-                    if d['type'] == 'classification':
+                    if d['type'] == 'category':
+                        item = QtGui.QStandardItem(self.categoryIcon, itemText)
+                    elif d['type'] == 'classification':
                         item = QtGui.QStandardItem(self.classificationIcon, itemText)
                     elif d['type'] == 'unit-type':
                         item = QtGui.QStandardItem(self.unitTypeIcon, itemText)
