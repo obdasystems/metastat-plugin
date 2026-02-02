@@ -474,9 +474,18 @@ class MetastatWidget(QtWidgets.QWidget):
             elif reply.isFinished() and reply.error() != QtNetwork.QNetworkReply.NoError:
                 msg = f'Failed to retrieve metastat data: {reply.errorString()}'
                 LOGGER.warning(msg)
-                self.session.statusBar().showMessage(msg)
+                self.session.addNotification("""
+                <b><font color="#7E0B17">ERROR</font></b>:
+                Failed to retrieve metastat data.
+                See System Log for details.
+                """)
         except Exception as e:
             LOGGER.error(f'Failed to retrieve metastat data: {e}')
+            self.session.addNotification("""
+            <b><font color="#7E0B17">ERROR</font></b>:
+            Failed to retrieve metastat data.
+            See System Log for details.
+            """)
 
     #############################################
     #   INTERFACE
