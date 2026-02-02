@@ -346,7 +346,7 @@ class MetastatWidget(QtWidgets.QWidget):
             settings.setValue('metastat/index', self.repoCombobox.currentIndex())
             settings.sync()
             url = QtCore.QUrl(repo.uri)
-            url.setPath(f'{url.path()}/all')
+            url.setPath(f'{url.path()}')
             request = QtNetwork.QNetworkRequest(url)
             # request.setAttribute(MetadataRequest.RepositoryAttribute, repo)
             reply = self.session.nmanager.get(request)
