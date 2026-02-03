@@ -5,4 +5,4 @@ author: OBDA Systems
 contact: info@obdasystems.com
 id: metastat
 name: Metastat
-version: 0.1
+version: 0.2
