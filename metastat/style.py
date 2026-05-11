@@ -70,6 +70,14 @@ QPushButton:disabled {
     stop: 0.0 #FDFDFD, stop: 0.3 #F8F8F8,
     stop: 0.7 #EDEDED, stop: 1.0 #EBEBEB);
 }
+QPushButton#repo_sync_button,
+QPushButton#repo_sync_button:focus,
+QPushButton#repo_sync_button:hover,
+QPushButton#repo_sync_button:hover:focus,
+QPushButton#repo_sync_button:pressed,
+QPushButton#repo_sync_button:pressed:focus {
+  padding: 0;
+}
 QPushButton.flat,
 QPushButton.flat:focus,
 QPushButton.flat:pressed,

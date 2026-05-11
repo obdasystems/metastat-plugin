@@ -5,6 +5,7 @@ from abc import (
     abstractmethod,
 )
 import json
+from pathlib import Path
 from typing import Any
 
 from PyQt5 import (
@@ -119,6 +120,11 @@ class MetastatWidget(QtWidgets.QWidget):
         ##############################
 
         self.repoButton = QtWidgets.QPushButton('Edit repositories', objectName='repo_edit_button')
+        refreshIconPath = Path(__file__).resolve().parent / 'resources' / 'icons' / 'ic_refresh_black_24dp_1x.png'
+        self.refreshButton = QtWidgets.QPushButton(objectName='repo_sync_button')
+        self.refreshButton.setIcon(QtGui.QIcon(str(refreshIconPath)))
+        self.refreshButton.setIconSize(QtCore.QSize(18, 18))
+        self.refreshButton.setToolTip('Sync repository')
         self.repoCombobox = QtWidgets.QComboBox(self)
         self.repoCombobox.addItems(map(lambda r: r.name, Repository.load()))
         self.repoCombobox.setCurrentIndex(settings.value('metastat/index', 0, int))
@@ -190,6 +196,7 @@ class MetastatWidget(QtWidgets.QWidget):
         self.repoLayout.setContentsMargins(0, 0, 0, 0)
         self.repoLayout.addWidget(self.repoCombobox)
         self.repoLayout.addWidget(self.repoButton)
+        self.repoLayout.addWidget(self.refreshButton)
         self.iriSearchLayout = QtWidgets.QHBoxLayout()
         self.iriSearchLayout.setContentsMargins(0, 0, 0, 0)
         self.iriSearchLayout.addWidget(self.searchLabel)
@@ -222,9 +229,11 @@ class MetastatWidget(QtWidgets.QWidget):
         self.setContentsMargins(0, 0, 0, 0)
         self.setMinimumWidth(216)
         self.setStyleSheet(stylesheet)
+        self.refreshButton.setFixedSize(30, self.repoButton.sizeHint().height())
 
         connect(self.repoCombobox.currentIndexChanged, self.onRepositoryChanged)
         connect(self.repoButton.clicked, self.doEditRepositories)
+        connect(self.refreshButton.clicked, self.doRefreshRepository)
         connect(self.searchIRI.textChanged, self.doFilterIRI)
         connect(self.searchIRI.returnPressed, self.onReturnPressed)
         connect(self.typeField.textChanged, self.doFilterType)
@@ -379,6 +388,13 @@ class MetastatWidget(QtWidgets.QWidget):
         """Executed to edit the list of metastat repositories."""
         dialog = RepositoryManagerDialog(self)
         dialog.open()
+
+    @QtCore.pyqtSlot()
+    def doRefreshRepository(self):
+        """Executed to reload data from the selected metastat repository."""
+        settings = QtCore.QSettings()
+        index = settings.value('metastat/index', 0, int)
+        self.onRepositoryChanged(index)
 
     @QtCore.pyqtSlot(str)
     def doFilterIRI(self, text):
