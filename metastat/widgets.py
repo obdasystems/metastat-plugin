@@ -431,9 +431,9 @@ class MetastatWidget(QtWidgets.QWidget):
         if not missingIris:
             self.session.addNotification(f"""
             <b>Metastat</b>:
-            All {len(ontologyIris)} Metastat ontology entities are present in the loaded repository data.
+            All {len(ontologyIris)} Metastat ontology entities are present in the loaded repository data. Check for nodes with changes in metadata (highlighted).
             """)
-            self.handlePresentIris(ontologyIris)
+            self.checkPresentIrisMetadata(ontologyIris)
             return
 
         LOGGER.warning(
@@ -447,11 +447,12 @@ class MetastatWidget(QtWidgets.QWidget):
         <b><font color="#7E0B17">WARNING</font></b>:
         {len(missingIris)} Metastat ontology entities are missing from the loaded repository data.
         <br/>{preview}{more}
+        <br/> Check also for nodes with changes in metadata (highlighted in orange).
         """)
 
         self.handleMissingEntities(missingIris)
         presentIris = sorted(ontologyIris - set(missingIris))
-        self.handlePresentIris(presentIris)
+        self.checkPresentIrisMetadata(presentIris)
 
     def handleMissingEntities(self, missingIris):
         """Make missing nodes red"""
@@ -470,8 +471,60 @@ class MetastatWidget(QtWidgets.QWidget):
             )
             nodes = set()
 
-    def handlePresentIris(self, presentIris):
-        print(presentIris)
+    def checkPresentIrisMetadata(self, presentIris):
+        """Check that ontology labels/comments are present in the matching Metastat metadata."""
+        repositoryEntities = self.repositoryMetastatEntities()
+        projectIris = {str(iri): iri for iri in self.projectIris()}
+        modifiedIris = set()
+
+        for iriString in presentIris:
+            missingLabels = []
+            missingComments = []
+            entity = repositoryEntities.get(iriString)
+            if not entity:
+                continue
+
+            iri = projectIris.get(str(iriString))
+            if not iri:
+                continue
+
+            labelAnnotations = iri.getAllLabelAnnotationAssertions()
+            lemmaValues = {lemma.value for lemma in entity.lemma}
+            for annotation in labelAnnotations:
+                label = str(annotation.value)
+                if label not in lemmaValues:
+                    missingLabels.append((str(iriString), label))
+
+            commentAnnotations = self.commentAnnotationAssertions(iri)
+            definitionValues = {definition.value for definition in entity.definition}
+            for annotation in commentAnnotations:
+                comment = str(annotation.value)
+                if comment not in definitionValues:
+                    missingComments.append((str(iriString), comment))
+
+            if missingLabels or missingComments:
+                modifiedIris.add(iriString)
+
+        if not modifiedIris:
+            LOGGER.info(
+                "All Metastat label/comment annotations are present in repository lemmas/definitions."
+            )
+            return
+        self.handleModifiedEntities(modifiedIris)
+
+    def handleModifiedEntities(self, modifiedIris):
+        """Make modified nodes orange"""
+        nodes = set()
+        diagrams = self.project.diagrams()
+        for diagram in diagrams:
+            for node in diagram.nodes():
+                iri = getattr(node, 'iri', None)
+                if iri and str(iri) in modifiedIris:
+                    nodes.add(node)
+            self.session.undostack.push(
+                CommandNodeSetBrush(diagram, nodes, QtGui.QBrush(QtGui.QColor("orange")))
+            )
+            nodes = set()
 
     @QtCore.pyqtSlot(str)
     def doFilterIRI(self, text):
@@ -599,6 +652,14 @@ class MetastatWidget(QtWidgets.QWidget):
                 return annotation
         return None
 
+    def commentAnnotationAssertions(self, iri):
+        """Return all rdfs:comment annotation assertions for the given Eddy IRI."""
+        return [
+            annotation
+            for annotation in getattr(iri, 'annotationAssertions', [])
+            if annotation.assertionProperty == AnnotationAssertionProperty.Comment.value
+        ]
+
     def projectMetastatIris(self) -> set[str]:
         """Return Metastat IRIs currently used in the Eddy project."""
         iris = set()
@@ -619,17 +680,20 @@ class MetastatWidget(QtWidgets.QWidget):
                         iris.add(iri)
         return iris
 
-
     def repositoryMetastatIris(self) -> set[str]:
         """Return Metastat IRIs loaded from the selected repository."""
-        iris = set()
+        return set(self.repositoryMetastatEntities().keys())
+
+    def repositoryMetastatEntities(self) -> dict[str, NamedEntity]:
+        """Return loaded repository entities indexed by their Metastat IRI."""
+        entities = {}
         for row in range(self.model.rowCount()):
             item = self.model.item(row)
             if item:
                 data = item.data()
                 if isinstance(data, NamedEntity):
-                    iris.add(str(data.iri))
-        return iris
+                    entities[str(data.iri)] = data
+        return entities
 
     def sizeHint(self):
         """
