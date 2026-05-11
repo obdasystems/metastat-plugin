@@ -14,7 +14,8 @@ from PyQt5 import (
     QtNetwork,
     QtWidgets,
 )
-from eddy.core.commands.iri import CommandIRIAddAnnotationAssertion
+from eddy.core.commands.iri import ( CommandIRIAddAnnotationAssertion, CommandIRIRemoveAnnotationAssertion)
+from eddy.core.commands.nodes import CommandNodeSetBrush
 from eddy.core.functions.misc import first
 from eddy.core.functions.signals import connect
 from eddy.core.output import getLogger
@@ -67,6 +68,8 @@ class MetastatWidget(QtWidgets.QWidget):
     """
     This class implements the widget used to browse metastat sources.
     """
+    METASTAT_IRI_PREFIX = "http://www.istat.it/metastat/"
+
     CATEGORY_TYPE_COLOR = QtGui.QColor("#BDEBF9")
     CLASSIFICATION_TYPE_COLOR = QtGui.QColor("#E6E6FA")
     UNIT_TYPE_COLOR = QtGui.QColor("#CFFFE5")
@@ -121,10 +124,15 @@ class MetastatWidget(QtWidgets.QWidget):
 
         self.repoButton = QtWidgets.QPushButton('Edit repositories', objectName='repo_edit_button')
         refreshIconPath = Path(__file__).resolve().parent / 'resources' / 'icons' / 'ic_refresh_black_24dp_1x.png'
+        checkIconPath = Path(__file__).resolve().parent / 'resources' / 'icons' / 'ic_check_sync_black_24dp.png'
         self.refreshButton = QtWidgets.QPushButton(objectName='repo_sync_button')
         self.refreshButton.setIcon(QtGui.QIcon(str(refreshIconPath)))
         self.refreshButton.setIconSize(QtCore.QSize(18, 18))
         self.refreshButton.setToolTip('Sync repository')
+        self.checkEntitiesButton = QtWidgets.QPushButton(objectName='entities_sync_button')
+        self.checkEntitiesButton.setIcon(QtGui.QIcon(str(checkIconPath)))
+        self.checkEntitiesButton.setIconSize(QtCore.QSize(18, 18))
+        self.checkEntitiesButton.setToolTip('Check ontology entities sync')
         self.repoCombobox = QtWidgets.QComboBox(self)
         self.repoCombobox.addItems(map(lambda r: r.name, Repository.load()))
         self.repoCombobox.setCurrentIndex(settings.value('metastat/index', 0, int))
@@ -197,6 +205,7 @@ class MetastatWidget(QtWidgets.QWidget):
         self.repoLayout.addWidget(self.repoCombobox)
         self.repoLayout.addWidget(self.repoButton)
         self.repoLayout.addWidget(self.refreshButton)
+        self.repoLayout.addWidget(self.checkEntitiesButton)
         self.iriSearchLayout = QtWidgets.QHBoxLayout()
         self.iriSearchLayout.setContentsMargins(0, 0, 0, 0)
         self.iriSearchLayout.addWidget(self.searchLabel)
@@ -230,10 +239,12 @@ class MetastatWidget(QtWidgets.QWidget):
         self.setMinimumWidth(216)
         self.setStyleSheet(stylesheet)
         self.refreshButton.setFixedSize(30, self.repoButton.sizeHint().height())
+        self.checkEntitiesButton.setFixedSize(30, self.repoButton.sizeHint().height())
 
         connect(self.repoCombobox.currentIndexChanged, self.onRepositoryChanged)
         connect(self.repoButton.clicked, self.doEditRepositories)
         connect(self.refreshButton.clicked, self.doRefreshRepository)
+        connect(self.checkEntitiesButton.clicked, self.onCheckEntitiesSync)
         connect(self.searchIRI.textChanged, self.doFilterIRI)
         connect(self.searchIRI.returnPressed, self.onReturnPressed)
         connect(self.typeField.textChanged, self.doFilterType)
@@ -396,6 +407,72 @@ class MetastatWidget(QtWidgets.QWidget):
         index = settings.value('metastat/index', 0, int)
         self.onRepositoryChanged(index)
 
+    @QtCore.pyqtSlot()
+    def onCheckEntitiesSync(self):
+        """Check that Metastat entities in the ontology exist in the loaded repository data."""
+        ontologyIris = self.projectMetastatIris()
+        repositoryIris = self.repositoryMetastatIris()
+
+        if not ontologyIris:
+            self.session.addNotification("""
+            <b>Metastat</b>:
+            No Metastat entities found in the current ontology.
+            """)
+            return
+
+        if not repositoryIris:
+            self.session.addNotification("""
+            <b><font color="#7E0B17">WARNING</font></b>:
+            No repository data is currently loaded.
+            """)
+            return
+
+        missingIris = sorted(ontologyIris - repositoryIris)
+        if not missingIris:
+            self.session.addNotification(f"""
+            <b>Metastat</b>:
+            All {len(ontologyIris)} Metastat ontology entities are present in the loaded repository data.
+            """)
+            self.handlePresentIris(ontologyIris)
+            return
+
+        LOGGER.warning(
+            "Metastat ontology entities missing from repository data: %s",
+            ", ".join(missingIris),
+        )
+        preview = "<br/>".join(missingIris[:10])
+        remaining = len(missingIris) - 10
+        more = f"<br/>... and {remaining} more." if remaining > 0 else ""
+        self.session.addNotification(f"""
+        <b><font color="#7E0B17">WARNING</font></b>:
+        {len(missingIris)} Metastat ontology entities are missing from the loaded repository data.
+        <br/>{preview}{more}
+        """)
+
+        self.handleMissingEntities(missingIris)
+        presentIris = sorted(ontologyIris - set(missingIris))
+        self.handlePresentIris(presentIris)
+
+    def handleMissingEntities(self, missingIris):
+        """Make missing nodes red"""
+        nodes = set()
+        diagrams = self.project.diagrams()
+        for diagram in diagrams:
+            for node in diagram.nodes():
+                iri = getattr(node, 'iri', None)
+                if iri and str(iri) in missingIris:
+                    nodes.add(node)
+                    annotation = self.findMetastatOriginAnnotationAssertion(iri)
+                    if annotation:
+                        self.session.undostack.push(CommandIRIRemoveAnnotationAssertion(self.project, iri, annotation))
+            self.session.undostack.push(
+                CommandNodeSetBrush(diagram, nodes, QtGui.QBrush(QtGui.QColor("red")))
+            )
+            nodes = set()
+
+    def handlePresentIris(self, presentIris):
+        print(presentIris)
+
     @QtCore.pyqtSlot(str)
     def doFilterIRI(self, text):
         """Executed to filter items in the treeview by IRI."""
@@ -513,6 +590,46 @@ class MetastatWidget(QtWidgets.QWidget):
         """
         self.entityview.update()
         self.details.redraw()
+
+    def findMetastatOriginAnnotationAssertion(self, iri):
+        annotations = iri.annotationAssertions
+        for annotation in annotations:
+            if str(annotation.assertionProperty) == "urn:x-graphol:origin" and str(
+                annotation.value) == "http://www.istat.it/metastat/":
+                return annotation
+        return None
+
+    def projectMetastatIris(self) -> set[str]:
+        """Return Metastat IRIs currently used in the Eddy project."""
+        iris = set()
+        for iri in self.projectIris():
+            annotation = self.findMetastatOriginAnnotationAssertion(iri)
+            if annotation:
+                iris.add(str(iri))
+        return iris
+
+    def projectIris(self) -> set[Any]:
+        """Return project IRI-like objects using the Eddy APIs available at runtime."""
+        iris = set()
+        diagrams = self.project.diagrams()
+        for diagram in diagrams:
+            for node in diagram.nodes():
+                    iri = getattr(node, 'iri', None)
+                    if iri:
+                        iris.add(iri)
+        return iris
+
+
+    def repositoryMetastatIris(self) -> set[str]:
+        """Return Metastat IRIs loaded from the selected repository."""
+        iris = set()
+        for row in range(self.model.rowCount()):
+            item = self.model.item(row)
+            if item:
+                data = item.data()
+                if isinstance(data, NamedEntity):
+                    iris.add(str(data.iri))
+        return iris
 
     def sizeHint(self):
         """

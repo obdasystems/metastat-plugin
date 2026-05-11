@@ -75,7 +75,13 @@ QPushButton#repo_sync_button:focus,
 QPushButton#repo_sync_button:hover,
 QPushButton#repo_sync_button:hover:focus,
 QPushButton#repo_sync_button:pressed,
-QPushButton#repo_sync_button:pressed:focus {
+QPushButton#repo_sync_button:pressed:focus,
+QPushButton#entities_sync_button,
+QPushButton#entities_sync_button:focus,
+QPushButton#entities_sync_button:hover,
+QPushButton#entities_sync_button:hover:focus,
+QPushButton#entities_sync_button:pressed,
+QPushButton#entities_sync_button:pressed:focus {
   padding: 0;
 }
 QPushButton.flat,
