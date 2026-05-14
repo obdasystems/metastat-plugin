@@ -18,6 +18,7 @@ from eddy.core.commands.iri import ( CommandIRIAddAnnotationAssertion, CommandIR
 from eddy.core.commands.nodes import CommandNodeSetBrush
 from eddy.core.functions.misc import first
 from eddy.core.functions.signals import connect
+from eddy.core.items.common import AbstractItem
 from eddy.core.output import getLogger
 from eddy.core.owl import (
     AnnotationAssertion,
@@ -456,20 +457,15 @@ class MetastatWidget(QtWidgets.QWidget):
 
     def handleMissingEntities(self, missingIris):
         """Make missing nodes red"""
-        nodes = set()
         diagrams = self.project.diagrams()
         for diagram in diagrams:
             for node in diagram.nodes():
                 iri = getattr(node, 'iri', None)
                 if iri and str(iri) in missingIris:
-                    nodes.add(node)
                     annotation = self.findMetastatOriginAnnotationAssertion(iri)
                     if annotation:
                         self.session.undostack.push(CommandIRIRemoveAnnotationAssertion(self.project, iri, annotation))
-            self.session.undostack.push(
-                CommandNodeSetBrush(diagram, nodes, QtGui.QBrush(QtGui.QColor("red")))
-            )
-            nodes = set()
+                    node.updateNode(selected=False, valid=False)
 
     def checkPresentIrisMetadata(self, presentIris):
         """Check that ontology labels/comments are present in the matching Metastat metadata."""
@@ -514,17 +510,12 @@ class MetastatWidget(QtWidgets.QWidget):
 
     def handleModifiedEntities(self, modifiedIris):
         """Make modified nodes orange"""
-        nodes = set()
         diagrams = self.project.diagrams()
         for diagram in diagrams:
             for node in diagram.nodes():
                 iri = getattr(node, 'iri', None)
                 if iri and str(iri) in modifiedIris:
-                    nodes.add(node)
-            self.session.undostack.push(
-                CommandNodeSetBrush(diagram, nodes, QtGui.QBrush(QtGui.QColor("orange")))
-            )
-            nodes = set()
+                    node.updateNode(selected=False, valid=False, color=QtGui.QColor("orange"))
 
     @QtCore.pyqtSlot(str)
     def doFilterIRI(self, text):
