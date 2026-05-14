@@ -8,6 +8,7 @@ from PyQt5 import (
     QtWidgets,
 )
 from eddy.core.commands.iri import CommandIRIAddAnnotationAssertion
+from eddy.core.commands.edges import CommandEdgeAdd
 from eddy.core.commands.nodes import CommandNodeAdd
 from eddy.core.datatypes.graphol import Item
 from eddy.core.datatypes.misc import DiagramMode
@@ -126,6 +127,17 @@ class MetastatPlugin(AbstractPlugin):
                 node.iri = subject
                 node.setPos(snap(event.scenePos(), Diagram.GridSize, snapToGrid))
                 self.session.undostack.push(CommandNodeAdd(diagram, node))
+                # Check drop node for concept nodes
+                if node.Type == Item.ConceptNode:
+                    for n in diagram.items(event.scenePos(), edges=False):
+                        # 1. If dropped on a restriction node insert an inclusion edge
+                        if n and n.Type in [Item.DomainRestrictionNode, Item.RangeRestrictionNode]:
+                            edge = diagram.factory.create(Item.InclusionEdge, source=node, target=n)
+                            self.session.undostack.push(CommandEdgeAdd(diagram, edge))
+                        # 2. If dropped on a set operation node (and, or) insert an input edge
+                        if n and n.Type in [Item.IntersectionNode, Item.DisjointUnionNode, Item.UnionNode]:
+                            edge = diagram.factory.create(Item.InputEdge, source=node, target=n)
+                            self.session.undostack.push(CommandEdgeAdd(diagram, edge))
                 self.session.undostack.endMacro()
             else:
                 event.setDropAction(QtCore.Qt.DropAction.IgnoreAction)
