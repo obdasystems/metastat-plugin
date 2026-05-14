@@ -59,7 +59,7 @@ def entityText(item: dict) -> str:
         if lemma and lemma['value']:
             return lemma['value']
         else:
-            LOGGER.warning('Missing lemma for lang tag: ', lang)
+            LOGGER.warning('Missing lemma for entity "%s", lang tag: %s', item['id'], lang)
             return item['id']
     else:
         return item['id']
@@ -792,16 +792,17 @@ class MetastatView(QtWidgets.QListView):
         """
         Update the view for the given index (if any).
         """
+        proxy = self.model()
+
         if index:
-            super().update(index)
-            proxy = self.model()
             item = proxy.sourceModel().itemFromIndex(proxy.mapToSource(index))
             item.setText(entityText(item.data().to_dict(deep=True)))
-            super().update()
+            super().update(index)
         else:
             for row in range(self.model().rowCount()):
                 index = self.model().index(row, 0)
-                self.update(index)
+                item = proxy.sourceModel().itemFromIndex(proxy.mapToSource(index))
+                item.setText(entityText(item.data().to_dict(deep=True)))
             super().update()
 
     #############################################
