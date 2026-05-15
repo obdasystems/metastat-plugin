@@ -593,6 +593,7 @@ class MetastatWidget(QtWidgets.QWidget):
             reply.deleteLater()
             if reply.isFinished() and reply.error() == QtNetwork.QNetworkReply.NoError:
                 data = json.loads(str(reply.readAll(), encoding='utf-8'))
+                entities = { d['id']: d for d in data }  # Lookup table for entities by id
                 for d in data:
                     itemText = entityText(d)
                     if d['type'] == 'category':
@@ -607,6 +608,11 @@ class MetastatWidget(QtWidgets.QWidget):
                         LOGGER.warning(f'Unknown metastat type: {d["type"]}')
                         continue
                     item.setData(NamedEntity.from_dict(d))
+                    for rel_id in d.get('related', []):
+                        child = entities.get(rel_id, {})
+                        childItem = QtGui.QStandardItem(entityText(child))
+                        childItem.setData(NamedEntity.from_dict(child))
+                        item.appendRow(childItem)
                     self.model.appendRow(item)
             elif reply.isFinished() and reply.error() != QtNetwork.QNetworkReply.NoError:
                 msg = f'Failed to retrieve metastat data: {reply.errorString()}'
@@ -694,9 +700,9 @@ class MetastatWidget(QtWidgets.QWidget):
         return QtCore.QSize(266, 216)
 
 
-class MetastatView(QtWidgets.QListView):
+class MetastatView(QtWidgets.QTreeView):
     """
-    This class implements the metastat list view.
+    This class implements the metastat tree view.
     """
     def __init__(self, parent):
         """
@@ -705,12 +711,14 @@ class MetastatView(QtWidgets.QListView):
         """
         super().__init__(parent)
         self.startPos = None
-        self.setContextMenuPolicy(QtCore.Qt.PreventContextMenu)
+        self.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.PreventContextMenu)
         self.setEditTriggers(QtWidgets.QTreeView.NoEditTriggers)
-        self.setFocusPolicy(QtCore.Qt.StrongFocus)
+        self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
+        self.setHeaderHidden(True)
         self.setHorizontalScrollMode(QtWidgets.QTreeView.ScrollPerPixel)
-        self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
-        self.setSelectionMode(QtWidgets.QListView.SelectionMode.SingleSelection)
+        self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.setSelectionMode(QtWidgets.QTreeView.SelectionMode.SingleSelection)
+        self.setSortingEnabled(True)
         self.setWordWrap(True)
         # self.setItemDelegate(MetastatItemDelegate(self))
 
@@ -744,7 +752,7 @@ class MetastatView(QtWidgets.QListView):
         :type mouseEvent: QMouseEvent
         """
         self.clearSelection()
-        if mouseEvent.buttons() & QtCore.Qt.LeftButton:
+        if mouseEvent.buttons() & QtCore.Qt.MouseButton.LeftButton:
             self.startPos = mouseEvent.pos()
         super().mousePressEvent(mouseEvent)
 
@@ -753,7 +761,7 @@ class MetastatView(QtWidgets.QListView):
         Executed when the mouse if moved while a button is being pressed.
         :type mouseEvent: QMouseEvent
         """
-        if mouseEvent.buttons() & QtCore.Qt.LeftButton:
+        if mouseEvent.buttons() & QtCore.Qt.MouseButton.LeftButton:
             distance = (mouseEvent.pos() - self.startPos).manhattanLength()
             if distance >= QtWidgets.QApplication.startDragDistance():
                 index = first(self.selectedIndexes())
@@ -788,6 +796,17 @@ class MetastatView(QtWidgets.QListView):
             painter.drawText(self.viewport().rect(), QtCore.Qt.AlignCenter, elided_text)
             painter.restore()
 
+    #############################################
+    #   INTERFACE
+    #################################
+
+    def sizeHintForColumn(self, column: int) -> int:
+        """
+        Returns the size hint for the given column.
+        This will make the column of the treeview as wide as the widget that contains the view.
+        """
+        return max(super().sizeHintForColumn(column), self.viewport().width())
+
     def update(self, index: QtCore.QModelIndex = None):
         """
         Update the view for the given index (if any).
@@ -805,19 +824,6 @@ class MetastatView(QtWidgets.QListView):
                 item.setText(entityText(item.data().to_dict(deep=True)))
             super().update()
 
-    #############################################
-    #   INTERFACE
-    #################################
-
-    def sizeHintForColumn(self, column):
-        """
-        Returns the size hint for the given column.
-        This will make the column of the treeview as wide as the widget that contains the view.
-        :type column: int
-        :rtype: int
-        """
-        return max(super().sizeHintForColumn(column), self.viewport().width())
-
 
 class MetastatFilterProxyModel(QtCore.QSortFilterProxyModel):
     """Extends QSortFilterProxyModel adding filtering functionalities for the metastat widget."""
@@ -829,6 +835,10 @@ class MetastatFilterProxyModel(QtCore.QSortFilterProxyModel):
         self.filter_lemma = ""
         self.filter_definition = ""
         self.filter_owner = ""
+
+    #############################################
+    #   INTERFACE
+    #################################
 
     def setIriFilter(self, text):
         self.filter_iri = text
