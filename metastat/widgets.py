@@ -46,25 +46,6 @@ from .style import stylesheet
 LOGGER = getLogger()
 
 
-def entityText(item: dict) -> str:
-    """
-    Returns the text for the response json object based on IRI render preferences.
-    """
-    settings = QtCore.QSettings()
-    rendering = IRIRender(settings.value('ontology/iri/render', IRIRender.FULL.value, str))
-    lang = settings.value('ontology/iri/render/language', 'en', str)
-
-    if rendering == IRIRender.LABEL:
-        lemma = first(filter(lambda i: i['lang'] == lang, item['lemma']))
-        if lemma and lemma['value']:
-            return lemma['value']
-        else:
-            LOGGER.warning('Missing lemma for entity "%s", lang tag: %s', item['id'], lang)
-            return item['id']
-    else:
-        return item['id']
-
-
 class MetastatWidget(QtWidgets.QWidget):
     """
     This class implements the widget used to browse metastat sources.
@@ -89,6 +70,8 @@ class MetastatWidget(QtWidgets.QWidget):
 
         self.plugin = plugin
         settings = QtCore.QSettings()
+
+        self.entities = None
 
         ########################################
         # ENTITY-TYPE ICONS
@@ -593,28 +576,17 @@ class MetastatWidget(QtWidgets.QWidget):
             reply.deleteLater()
             if reply.isFinished() and reply.error() == QtNetwork.QNetworkReply.NoError:
                 data = json.loads(str(reply.readAll(), encoding='utf-8'))
-                entities = { d['id']: d for d in data }  # Lookup table for entities by id
+                self.entities = { d['id']: d for d in data }  # Lookup table for entities by id
                 for d in data:
-                    itemText = entityText(d)
-                    if d['type'] == 'category':
-                        item = QtGui.QStandardItem(self.categoryIcon, itemText)
-                    elif d['type'] == 'classification':
-                        item = QtGui.QStandardItem(self.classificationIcon, itemText)
-                    elif d['type'] == 'unit-type':
-                        item = QtGui.QStandardItem(self.unitTypeIcon, itemText)
-                    elif d['type'] == 'variable':
-                        item = QtGui.QStandardItem(self.variableIcon, itemText)
-                    else:
-                        LOGGER.warning(f'Unknown metastat type: {d["type"]}')
-                        continue
+                    item = QtGui.QStandardItem(entityIcon(d, self), entityText(d))
                     item.setData(NamedEntity.from_dict(d))
                     for rel_id in d.get('related', []):
-                        child = entities.get(rel_id, {})
-                        childItem = QtGui.QStandardItem(entityText(child))
+                        child = self.entities.get(rel_id, {})
+                        childItem = QtGui.QStandardItem(entityIcon(child, self), entityText(child))
                         childItem.setData(NamedEntity.from_dict(child))
                         item.appendRow(childItem)
                     self.model.appendRow(item)
-            elif reply.isFinished() and reply.error() != QtNetwork.QNetworkReply.NoError:
+            elif reply.isFinished() and reply.error() != QtNetwork.QNetworkReply.NetworkError.NoError:
                 msg = f'Failed to retrieve metastat data: {reply.errorString()}'
                 LOGGER.warning(msg)
                 self.session.addNotification("""
@@ -1288,3 +1260,40 @@ class EmptyInfo(QtWidgets.QTextEdit):
         elided_text = fm.elidedText(bgMsg, QtCore.Qt.ElideRight, self.viewport().width())
         painter.drawText(self.viewport().rect(), QtCore.Qt.AlignCenter, elided_text)
         painter.restore()
+
+
+def entityText(item: dict) -> str:
+    """
+    Returns the text for the response json object based on IRI render preferences.
+    """
+    settings = QtCore.QSettings()
+    rendering = IRIRender(settings.value('ontology/iri/render', IRIRender.FULL.value, str))
+    lang = settings.value('ontology/iri/render/language', 'en', str)
+
+    if rendering == IRIRender.LABEL:
+        lemma = first(filter(lambda i: i['lang'] == lang, item['lemma']))
+        if lemma and lemma['value']:
+            return lemma['value']
+        else:
+            LOGGER.warning('Missing lemma for entity "%s", lang tag: %s', item['id'], lang)
+            return item['id']
+    else:
+        return item['id']
+
+
+def entityIcon(item: dict, widget: MetastatWidget) -> QtGui.QIcon | None:
+    """
+    Returns the icon for the response json object based on item type.
+    """
+    if item['type'] == 'category':
+        itemIcon = widget.categoryIcon
+    elif item['type'] == 'classification':
+        itemIcon = widget.classificationIcon
+    elif item['type'] == 'unit-type':
+        itemIcon = widget.unitTypeIcon
+    elif item['type'] == 'variable':
+        itemIcon = widget.variableIcon
+    else:
+        LOGGER.warning(f'Unknown metastat type: {item["type"]}')
+        itemIcon = None
+    return itemIcon

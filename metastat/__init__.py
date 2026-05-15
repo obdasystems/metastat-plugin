@@ -82,9 +82,9 @@ class MetastatPlugin(AbstractPlugin):
     def onDiagramDragDropEvent(self, diagram, event: QtWidgets.QGraphicsSceneDragDropEvent):
         # Show entity type selection diagram
         if event.mimeData().hasFormat('application/json+metastat'):
-            dialog = EntityTypeDialog(event.mimeData().text(), self.project.session)
+            entity = NamedEntity.from_dict(json.loads(event.mimeData().data('application/json+metastat').data()))
+            dialog = EntityTypeDialog(entity, self.project.session)
             if dialog.exec_() == QtWidgets.QDialog.Accepted:
-                entity = NamedEntity.from_dict(json.loads(event.mimeData().data('application/json+metastat').data()))
                 self.session.undostack.beginMacro('metastat entity drag&drop')
                 subject = self.session.project.getIRI('http://www.istat.it/metastat/' + str(entity.id))
                 predicate = self.session.project.getIRI('urn:x-graphol:origin')
@@ -127,17 +127,71 @@ class MetastatPlugin(AbstractPlugin):
                 node.iri = subject
                 node.setPos(snap(event.scenePos(), Diagram.GridSize, snapToGrid))
                 self.session.undostack.push(CommandNodeAdd(diagram, node))
-                # Check drop node for concept nodes
+                # Post-drop actions depending on selected node type
                 if node.Type == Item.ConceptNode:
+                    # 1. If dropped on restriction on set operation nodes insert corresponding relation edges
                     for n in diagram.items(event.scenePos(), edges=False):
-                        # 1. If dropped on a restriction node insert an inclusion edge
+                        # 1.1 If dropped on a restriction node insert an inclusion edge
                         if n and n.Type in [Item.DomainRestrictionNode, Item.RangeRestrictionNode]:
                             edge = diagram.factory.create(Item.InclusionEdge, source=node, target=n)
                             self.session.undostack.push(CommandEdgeAdd(diagram, edge))
-                        # 2. If dropped on a set operation node (and, or) insert an input edge
+                        # 2.1 If dropped on a set operation node (and, or) insert an input edge
                         if n and n.Type in [Item.IntersectionNode, Item.DisjointUnionNode, Item.UnionNode]:
                             edge = diagram.factory.create(Item.InputEdge, source=node, target=n)
                             self.session.undostack.push(CommandEdgeAdd(diagram, edge))
+                    # 2. If related entities insertion is selected import as generalization
+                    if dialog.related_checkbox.isChecked():
+                        hierSize = len(entity.related)
+                        unionNode = diagram.factory.create(Item.UnionNode)
+                        unionNode.setPos(snap(event.scenePos() + QtCore.QPoint(0, 150), Diagram.GridSize, snapToGrid))
+                        isaEdge = diagram.factory.create(Item.InclusionEdge, source=unionNode, target=node)
+                        self.session.undostack.push(CommandEdgeAdd(diagram, isaEdge))
+                        self.session.undostack.push(CommandNodeAdd(diagram, unionNode))
+                        unionPos = unionNode.pos()
+                        for i in range(hierSize):
+                            childNode = diagram.factory.create(Item.ConceptNode)
+                            childNode.setPos(QtCore.QPointF(unionPos.x() + i * 150, unionPos.y() + 150))
+                            childNode.iri = self.session.project.getIRI('http://www.istat.it/metastat/' + entity.related[i])
+                            childEntity = NamedEntity.from_dict(self.widget('metastat').entities.get(entity.related[i]))
+
+                            # Add annotations for related entity node
+                            subject = childNode.iri
+                            predicate = self.session.project.getIRI('urn:x-graphol:origin')
+                            object_ = IRI('http://www.istat.it/metastat/')
+                            ast = AnnotationAssertion(subject, predicate, object_)
+                            cmd = CommandIRIAddAnnotationAssertion(self.session.project, subject, ast)
+                            self.session.undostack.push(cmd)
+
+                            # Add lemmas for related entity as rdfs:label
+                            for lemma in childEntity.lemma:
+                                ast = AnnotationAssertion(
+                                    subject,
+                                    AnnotationAssertionProperty.Label.value,
+                                    lemma.value,
+                                    None,
+                                    lemma.lang,
+                                )
+                                cmd = CommandIRIAddAnnotationAssertion(self.session.project, subject, ast)
+                                self.session.undostack.push(cmd)
+
+                            # Add definitions for related entity as rdfs:comment
+                            for definition in childEntity.definition:
+                                ast = AnnotationAssertion(
+                                    subject,
+                                    AnnotationAssertionProperty.Comment.value,
+                                    definition.value,
+                                    None,
+                                    definition.lang,
+                                )
+                                cmd = CommandIRIAddAnnotationAssertion(self.session.project, subject, ast)
+                                self.session.undostack.push(cmd)
+                            self.session.undostack.push(CommandNodeAdd(diagram, childNode))
+                            inputEdge = diagram.factory.create(Item.InputEdge, source=childNode, target=unionNode)
+                            self.session.undostack.push(CommandEdgeAdd(diagram, inputEdge))
+                elif node.Type == Item.RoleNode:
+                    # TODO: Import related as domain and range
+                    pass
+
                 self.session.undostack.endMacro()
             else:
                 event.setDropAction(QtCore.Qt.DropAction.IgnoreAction)
