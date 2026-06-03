@@ -18,10 +18,12 @@ from .settings import Repository
 class EntityTypeDialog(QtWidgets.QDialog):
     """Dialog to select entity type in the ontology when dropped onto a diagram."""
 
-    def __init__(self, text, parent: QtWidgets.QWidget = None):
+    def __init__(self, entity, parent: QtWidgets.QWidget = None):
         super().__init__(parent)
+        self.entity = entity
+
         layout = QtWidgets.QVBoxLayout(self)
-        layout.addWidget(QtWidgets.QLabel(f"Choose an Entity type for {text}:"))
+        layout.addWidget(QtWidgets.QLabel(f"Choose an Entity type for {entity.id}:"))
         class_rb = QtWidgets.QRadioButton("Class")
         object_property_rb = QtWidgets.QRadioButton("Object Property")
         data_property_rb = QtWidgets.QRadioButton("Data Property")
@@ -35,6 +37,8 @@ class EntityTypeDialog(QtWidgets.QDialog):
         for rb in [class_rb, object_property_rb, data_property_rb, individual_rb]:
             connect(rb.toggled, self.doUpdateState)
             layout.addWidget(rb)
+        self.related_checkbox = QtWidgets.QCheckBox("Include related entities", self)
+        layout.addWidget(self.related_checkbox)
         self.btns = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
         layout.addWidget(self.btns)
         connect(self.btns.accepted, self.accept)

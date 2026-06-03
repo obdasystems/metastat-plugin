@@ -46,25 +46,6 @@ from .style import stylesheet
 LOGGER = getLogger()
 
 
-def entityText(item: dict) -> str:
-    """
-    Returns the text for the response json object based on IRI render preferences.
-    """
-    settings = QtCore.QSettings()
-    rendering = IRIRender(settings.value('ontology/iri/render', IRIRender.FULL.value, str))
-    lang = settings.value('ontology/iri/render/language', 'en', str)
-
-    if rendering == IRIRender.LABEL:
-        lemma = first(filter(lambda i: i['lang'] == lang, item['lemma']))
-        if lemma and lemma['value']:
-            return lemma['value']
-        else:
-            LOGGER.warning('Missing lemma for lang tag: ', lang)
-            return item['id']
-    else:
-        return item['id']
-
-
 class MetastatWidget(QtWidgets.QWidget):
     """
     This class implements the widget used to browse metastat sources.
@@ -89,6 +70,8 @@ class MetastatWidget(QtWidgets.QWidget):
 
         self.plugin = plugin
         settings = QtCore.QSettings()
+
+        self.entities = None
 
         ########################################
         # ENTITY-TYPE ICONS
@@ -593,22 +576,17 @@ class MetastatWidget(QtWidgets.QWidget):
             reply.deleteLater()
             if reply.isFinished() and reply.error() == QtNetwork.QNetworkReply.NoError:
                 data = json.loads(str(reply.readAll(), encoding='utf-8'))
+                self.entities = { d['id']: d for d in data }  # Lookup table for entities by id
                 for d in data:
-                    itemText = entityText(d)
-                    if d['type'] == 'category':
-                        item = QtGui.QStandardItem(self.categoryIcon, itemText)
-                    elif d['type'] == 'classification':
-                        item = QtGui.QStandardItem(self.classificationIcon, itemText)
-                    elif d['type'] == 'unit-type':
-                        item = QtGui.QStandardItem(self.unitTypeIcon, itemText)
-                    elif d['type'] == 'variable':
-                        item = QtGui.QStandardItem(self.variableIcon, itemText)
-                    else:
-                        LOGGER.warning(f'Unknown metastat type: {d["type"]}')
-                        continue
+                    item = QtGui.QStandardItem(entityIcon(d, self), entityText(d))
                     item.setData(NamedEntity.from_dict(d))
+                    for rel_id in d.get('related', []):
+                        child = self.entities.get(rel_id, {})
+                        childItem = QtGui.QStandardItem(entityIcon(child, self), entityText(child))
+                        childItem.setData(NamedEntity.from_dict(child))
+                        item.appendRow(childItem)
                     self.model.appendRow(item)
-            elif reply.isFinished() and reply.error() != QtNetwork.QNetworkReply.NoError:
+            elif reply.isFinished() and reply.error() != QtNetwork.QNetworkReply.NetworkError.NoError:
                 msg = f'Failed to retrieve metastat data: {reply.errorString()}'
                 LOGGER.warning(msg)
                 self.session.addNotification("""
@@ -694,9 +672,9 @@ class MetastatWidget(QtWidgets.QWidget):
         return QtCore.QSize(266, 216)
 
 
-class MetastatView(QtWidgets.QListView):
+class MetastatView(QtWidgets.QTreeView):
     """
-    This class implements the metastat list view.
+    This class implements the metastat tree view.
     """
     def __init__(self, parent):
         """
@@ -705,12 +683,14 @@ class MetastatView(QtWidgets.QListView):
         """
         super().__init__(parent)
         self.startPos = None
-        self.setContextMenuPolicy(QtCore.Qt.PreventContextMenu)
+        self.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.PreventContextMenu)
         self.setEditTriggers(QtWidgets.QTreeView.NoEditTriggers)
-        self.setFocusPolicy(QtCore.Qt.StrongFocus)
+        self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
+        self.setHeaderHidden(True)
         self.setHorizontalScrollMode(QtWidgets.QTreeView.ScrollPerPixel)
-        self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
-        self.setSelectionMode(QtWidgets.QListView.SelectionMode.SingleSelection)
+        self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.setSelectionMode(QtWidgets.QTreeView.SelectionMode.SingleSelection)
+        self.setSortingEnabled(True)
         self.setWordWrap(True)
         # self.setItemDelegate(MetastatItemDelegate(self))
 
@@ -744,7 +724,7 @@ class MetastatView(QtWidgets.QListView):
         :type mouseEvent: QMouseEvent
         """
         self.clearSelection()
-        if mouseEvent.buttons() & QtCore.Qt.LeftButton:
+        if mouseEvent.buttons() & QtCore.Qt.MouseButton.LeftButton:
             self.startPos = mouseEvent.pos()
         super().mousePressEvent(mouseEvent)
 
@@ -753,7 +733,7 @@ class MetastatView(QtWidgets.QListView):
         Executed when the mouse if moved while a button is being pressed.
         :type mouseEvent: QMouseEvent
         """
-        if mouseEvent.buttons() & QtCore.Qt.LeftButton:
+        if mouseEvent.buttons() & QtCore.Qt.MouseButton.LeftButton:
             distance = (mouseEvent.pos() - self.startPos).manhattanLength()
             if distance >= QtWidgets.QApplication.startDragDistance():
                 index = first(self.selectedIndexes())
@@ -788,34 +768,33 @@ class MetastatView(QtWidgets.QListView):
             painter.drawText(self.viewport().rect(), QtCore.Qt.AlignCenter, elided_text)
             painter.restore()
 
-    def update(self, index: QtCore.QModelIndex = None):
-        """
-        Update the view for the given index (if any).
-        """
-        if index:
-            super().update(index)
-            proxy = self.model()
-            item = proxy.sourceModel().itemFromIndex(proxy.mapToSource(index))
-            item.setText(entityText(item.data().to_dict(deep=True)))
-            super().update()
-        else:
-            for row in range(self.model().rowCount()):
-                index = self.model().index(row, 0)
-                self.update(index)
-            super().update()
-
     #############################################
     #   INTERFACE
     #################################
 
-    def sizeHintForColumn(self, column):
+    def sizeHintForColumn(self, column: int) -> int:
         """
         Returns the size hint for the given column.
         This will make the column of the treeview as wide as the widget that contains the view.
-        :type column: int
-        :rtype: int
         """
         return max(super().sizeHintForColumn(column), self.viewport().width())
+
+    def update(self, index: QtCore.QModelIndex = None):
+        """
+        Update the view for the given index (if any).
+        """
+        proxy = self.model()
+
+        if index:
+            item = proxy.sourceModel().itemFromIndex(proxy.mapToSource(index))
+            item.setText(entityText(item.data().to_dict(deep=True)))
+            super().update(index)
+        else:
+            for row in range(self.model().rowCount()):
+                index = self.model().index(row, 0)
+                item = proxy.sourceModel().itemFromIndex(proxy.mapToSource(index))
+                item.setText(entityText(item.data().to_dict(deep=True)))
+            super().update()
 
 
 class MetastatFilterProxyModel(QtCore.QSortFilterProxyModel):
@@ -828,6 +807,10 @@ class MetastatFilterProxyModel(QtCore.QSortFilterProxyModel):
         self.filter_lemma = ""
         self.filter_description = ""
         self.filter_owner = ""
+
+    #############################################
+    #   INTERFACE
+    #################################
 
     def setIriFilter(self, text):
         self.filter_iri = text
@@ -1277,3 +1260,40 @@ class EmptyInfo(QtWidgets.QTextEdit):
         elided_text = fm.elidedText(bgMsg, QtCore.Qt.ElideRight, self.viewport().width())
         painter.drawText(self.viewport().rect(), QtCore.Qt.AlignCenter, elided_text)
         painter.restore()
+
+
+def entityText(item: dict) -> str:
+    """
+    Returns the text for the response json object based on IRI render preferences.
+    """
+    settings = QtCore.QSettings()
+    rendering = IRIRender(settings.value('ontology/iri/render', IRIRender.FULL.value, str))
+    lang = settings.value('ontology/iri/render/language', 'en', str)
+
+    if rendering == IRIRender.LABEL:
+        lemma = first(filter(lambda i: i['lang'] == lang, item['lemma']))
+        if lemma and lemma['value']:
+            return lemma['value']
+        else:
+            LOGGER.warning('Missing lemma for entity "%s", lang tag: %s', item['id'], lang)
+            return item['id']
+    else:
+        return item['id']
+
+
+def entityIcon(item: dict, widget: MetastatWidget) -> QtGui.QIcon | None:
+    """
+    Returns the icon for the response json object based on item type.
+    """
+    if item['type'] == 'category':
+        itemIcon = widget.categoryIcon
+    elif item['type'] == 'classification':
+        itemIcon = widget.classificationIcon
+    elif item['type'] == 'unit-type':
+        itemIcon = widget.unitTypeIcon
+    elif item['type'] == 'variable':
+        itemIcon = widget.variableIcon
+    else:
+        LOGGER.warning(f'Unknown metastat type: {item["type"]}')
+        itemIcon = None
+    return itemIcon

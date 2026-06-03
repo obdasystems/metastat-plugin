@@ -112,6 +112,7 @@ class NamedEntity(Node):
         self._lemmas = []
         self._descriptions = []
         self._owner = None
+        self._related = []
 
     @property
     def id(self) -> str:
@@ -143,6 +144,11 @@ class NamedEntity(Node):
         """Return the process owner for this entity."""
         return self._owner
 
+    @property
+    def related(self) -> list[str]:
+        """Return the list of related entity ids."""
+        return self._related
+
     @classmethod
     def from_dict(cls, data: dict, **kwargs) -> NamedEntity:
         entity = NamedEntity(data["id"])
@@ -153,6 +159,8 @@ class NamedEntity(Node):
             entity._descriptions.extend([LiteralValue.from_dict(d) for d in data["description"]])
         if "owner" in data:
             entity._owner = Owner.from_dict(data["owner"])
+        if "related" in data:
+            entity._related.extend(data["related"])
         return entity
 
     def to_dict(self, deep: bool = False) -> dict:
@@ -165,6 +173,7 @@ class NamedEntity(Node):
                 "lemma": [a.to_dict() for a in self.lemma],
                 "description": [a.to_dict() for a in self.description],
                 "owner": self.owner.to_dict() if self.owner else {},
+                "related": self.related if self.related else []
             }
         return res
 
