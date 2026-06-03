@@ -139,10 +139,11 @@ class MetastatWidget(QtWidgets.QWidget):
         self.typeLabel.setMargin(1)
         self.typeLabel.setFixedWidth(80)
         self.typeLabel.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-        self.typeField = StringField(self)
-        self.typeField.setAcceptDrops(False)
-        self.typeField.setClearButtonEnabled(True)
-        self.typeField.setPlaceholderText('Search type...')
+        self.typeField = ComboBox(self)
+        self.typeField.addItem('')
+        self.typeField.addItems(['category', 'classification', 'unit-type', 'variable'])
+        self.typeField.setCurrentIndex(0)
+        self.typeField.setScrollEnabled(False)
         self.lemmaLabel = QtWidgets.QLabel(self, objectName='lemma_label')
         self.lemmaLabel.setText('Lemma:')
         self.lemmaLabel.setMargin(1)
@@ -231,8 +232,7 @@ class MetastatWidget(QtWidgets.QWidget):
         connect(self.checkEntitiesButton.clicked, self.onCheckEntitiesSync)
         connect(self.searchIRI.textChanged, self.doFilterIRI)
         connect(self.searchIRI.returnPressed, self.onReturnPressed)
-        connect(self.typeField.textChanged, self.doFilterType)
-        connect(self.typeField.returnPressed, self.onReturnPressed)
+        connect(self.typeField.currentTextChanged, self.doFilterType)
         connect(self.lemmaField.textChanged, self.doFilterLemma)
         connect(self.lemmaField.returnPressed, self.onReturnPressed)
         connect(self.descriptionField.textChanged, self.doFilterDescription)
@@ -818,7 +818,7 @@ class MetastatFilterProxyModel(QtCore.QSortFilterProxyModel):
 
     def setTypeFilter(self, text):
         # "" = no filter
-        self.filter_type = text
+        self.filter_type = text.strip().lower()
         self.invalidateFilter()
 
     def setLemmaFilter(self, text):
@@ -852,7 +852,7 @@ class MetastatFilterProxyModel(QtCore.QSortFilterProxyModel):
         if self.filter_iri and self.filter_iri.lower() not in iri.lower():
             return False
 
-        if self.filter_type and self.filter_type.lower() not in varType.lower():
+        if self.filter_type and self.filter_type != varType.lower():
             return False
 
         if self.filter_lemma:
