@@ -109,13 +109,13 @@ class MetastatPlugin(AbstractPlugin):
                     self.session.undostack.push(cmd)
 
                 # Add definitions for entity as rdfs:comment
-                for definition in entity.definition:
+                for description in entity.description:
                     ast = AnnotationAssertion(
                         subject,
                         AnnotationAssertionProperty.Comment.value,
-                        definition.value,
+                        description.value,
                         None,
-                        definition.lang,
+                        description.lang,
                     )
                     cmd = CommandIRIAddAnnotationAssertion(self.session.project, subject, ast)
                     self.session.undostack.push(cmd)

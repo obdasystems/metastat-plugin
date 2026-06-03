@@ -110,7 +110,7 @@ class NamedEntity(Node):
         self._id = id_
         self._type = None
         self._lemmas = []
-        self._definitions = []
+        self._descriptions = []
         self._owner = None
 
     @property
@@ -134,9 +134,9 @@ class NamedEntity(Node):
         return self._lemmas
 
     @property
-    def definition(self) -> list[LiteralValue]:
-        """Return the list of definitions for this entity."""
-        return self._definitions
+    def description(self) -> list[LiteralValue]:
+        """Return the list of descriptions for this entity."""
+        return self._descriptions
 
     @property
     def owner(self) -> Owner:
@@ -149,8 +149,8 @@ class NamedEntity(Node):
         entity._type = data["type"]
         if "lemma" in data:
             entity._lemmas.extend([LiteralValue.from_dict(l) for l in data["lemma"]])
-        if "definition" in data:
-            entity._definitions.extend([LiteralValue.from_dict(d) for d in data["definition"]])
+        if "description" in data:
+            entity._descriptions.extend([LiteralValue.from_dict(d) for d in data["description"]])
         if "owner" in data:
             entity._owner = Owner.from_dict(data["owner"])
         return entity
@@ -163,7 +163,7 @@ class NamedEntity(Node):
         if deep:
             res |= {
                 "lemma": [a.to_dict() for a in self.lemma],
-                "definition": [a.to_dict() for a in self.definition],
+                "description": [a.to_dict() for a in self.description],
                 "owner": self.owner.to_dict() if self.owner else {},
             }
         return res

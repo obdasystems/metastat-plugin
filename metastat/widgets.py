@@ -492,10 +492,10 @@ class MetastatWidget(QtWidgets.QWidget):
                     missingLabels.append((str(iriString), label))
 
             commentAnnotations = self.commentAnnotationAssertions(iri)
-            definitionValues = {definition.value for definition in entity.definition}
+            descriptionValues = {description.value for description in entity.description}
             for annotation in commentAnnotations:
                 comment = str(annotation.value)
-                if comment not in definitionValues:
+                if comment not in descriptionValues:
                     missingComments.append((str(iriString), comment))
 
             if missingLabels or missingComments:
@@ -826,7 +826,7 @@ class MetastatFilterProxyModel(QtCore.QSortFilterProxyModel):
         self.filter_iri = ""
         self.filter_type = ""
         self.filter_lemma = ""
-        self.filter_definition = ""
+        self.filter_description = ""
         self.filter_owner = ""
 
     def setIriFilter(self, text):
@@ -843,7 +843,7 @@ class MetastatFilterProxyModel(QtCore.QSortFilterProxyModel):
         self.invalidateFilter()
 
     def setDescriptionFilter(self, text):
-        self.filter_definition = text
+        self.filter_description = text
         self.invalidateFilter()
 
     def setOwnerFilter(self, text):
@@ -859,7 +859,7 @@ class MetastatFilterProxyModel(QtCore.QSortFilterProxyModel):
                 iri = data.iri
                 varType = data.type
                 lemmas = data.lemma
-                definitions = data.definition
+                descriptions = data.description
                 owner = data.owner
             else:
                 return False
@@ -880,10 +880,10 @@ class MetastatFilterProxyModel(QtCore.QSortFilterProxyModel):
             if not lemma_contains:
                 return False
 
-        if self.filter_definition:
+        if self.filter_description:
             description_contains = False
-            for d in definitions:
-                if self.filter_definition.lower() in d.value.lower():
+            for d in descriptions:
+                if self.filter_description.lower() in d.value.lower():
                     description_contains = True
             if not description_contains:
                 return False
@@ -1248,8 +1248,8 @@ class EntityInfo(AbstractInfo):
             if lang:
                 self.metadataLayout.addRow(Key('Language', self), String(lang, self))
             self.metadataLayout.addItem(QtWidgets.QSpacerItem(10, 2))
-        for definition in entity.definition:
-            value, lang = definition.value, definition.lang
+        for description in entity.description:
+            value, lang = description.value, description.lang
             self.metadataLayout.addRow(Key('Description', self), Text(value, self))
             if lang:
                 self.metadataLayout.addRow(Key('Language', self), String(lang, self))
