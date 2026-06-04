@@ -63,8 +63,9 @@ class RepositoryManagerDialog(QtWidgets.QDialog, HasWidgetSystem):
     def __init__(self, parent: QtWidgets.QWidget = None) -> None:
         """Initialize the repository manager dialog."""
         super().__init__(parent)
+        self._editing_row = None
 
-        table = QtWidgets.QTableWidget(0, 2, objectName='repository_table_widget')  # noqa
+        table = QtWidgets.QTableWidget(0, 2, objectName='repository_table_widget')
         table.setHorizontalHeaderLabels(['Name', 'Endpoint'])
         table.horizontalHeader().setStretchLastSection(True)
         table.horizontalHeader().setSectionsClickable(False)
@@ -73,6 +74,7 @@ class RepositoryManagerDialog(QtWidgets.QDialog, HasWidgetSystem):
         table.verticalHeader().setVisible(False)
         table.verticalHeader().setSectionsClickable(False)
         table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        connect(table.itemSelectionChanged, self.doRepositorySelectionChanged)
         self.addWidget(table)
 
         delBtn = QtWidgets.QPushButton(  # noqa
@@ -98,7 +100,7 @@ class RepositoryManagerDialog(QtWidgets.QDialog, HasWidgetSystem):
         uriField = StringField(self, objectName='repository_uri_field')
         addBtn = QtWidgets.QPushButton(  # noqa
             'Add',
-            clicked=self.doAddRepository,
+            clicked=self.doSaveRepository,
             objectName='repository_add_button',
         )
         self.addWidget(nameField)
@@ -113,14 +115,14 @@ class RepositoryManagerDialog(QtWidgets.QDialog, HasWidgetSystem):
         formlayout.addRow(QtWidgets.QLabel('URI'), uriField)
         formlayout.addRow(boxlayout)
 
-        groupbox = QtWidgets.QGroupBox('Add Repository', objectName='repository_add_groupbox')  # noqa
+        groupbox = QtWidgets.QGroupBox('Add/Edit Repository', objectName='repository_add_groupbox')
         groupbox.setLayout(formlayout)
         self.addWidget(groupbox)
 
         layout = QtWidgets.QVBoxLayout()
         layout.addWidget(self.widget('repository_list_groupbox'))
         layout.addWidget(self.widget('repository_add_groupbox'))
-        widget = QtWidgets.QWidget(objectName='repositories_widget')  # noqa
+        widget = QtWidgets.QWidget(objectName='repositories_widget')
         widget.setLayout(layout)
         self.addWidget(widget)
 
@@ -136,13 +138,17 @@ class RepositoryManagerDialog(QtWidgets.QDialog, HasWidgetSystem):
     #################################
 
     @QtCore.pyqtSlot()
-    def doAddRepository(self):
-        """Shows a dialog to insert a add a new repository."""
-        nameField = self.widget('repository_name_field')  # type: StringField
-        uriField = self.widget('repository_uri_field')  # type: StringField
+    def doSaveRepository(self):
+        """Add a new repository or update the selected one."""
+        nameField = self.widget('repository_name_field')
+        uriField = self.widget('repository_uri_field')
+        table = self.widget('repository_table_widget')
+
+        name = nameField.text().strip()
+        uri = uriField.text().strip()
 
         # Validate user input
-        if len(nameField.text()) == 0:
+        if len(name) == 0:
             msgBox = QtWidgets.QMessageBox(  # noqa
                 QtWidgets.QMessageBox.Warning,
                 'Invalid Repository Name',
@@ -153,7 +159,9 @@ class RepositoryManagerDialog(QtWidgets.QDialog, HasWidgetSystem):
                 """), parent=self,
             )
             msgBox.open()
-        elif not QtCore.QUrl(uriField.text()).isValid():
+            return
+
+        if not QtCore.QUrl(uri).isValid():
             msgBox = QtWidgets.QMessageBox(  # noqa
                 QtWidgets.QMessageBox.Warning,
                 'Invalid Repository URI',
@@ -169,24 +177,85 @@ class RepositoryManagerDialog(QtWidgets.QDialog, HasWidgetSystem):
                 parent=self,
             )
             msgBox.open()
+            return
+
+        existing_names = []
+        for row in range(table.rowCount()):
+            if row == self._editing_row:
+                continue
+            item = table.item(row, 0)
+            if item:
+                existing_names.append(item.text())
+
+        if name in existing_names:
+            msgBox = QtWidgets.QMessageBox(  # noqa
+                QtWidgets.QMessageBox.Warning,
+                'Duplicate Repository Error',
+                f'A repository named {name} already exists.',
+                informativeText=textwrap.dedent("""
+                Repository names must be unique to avoid ambiguity in the user interface.
+                """),
+                parent=self,
+            )
+            msgBox.open()
+            return
+
+        if self._editing_row is None:
+            row = table.rowCount()
+            table.insertRow(row)
         else:
-            # Add new repository
-            repos = Repository.load()
-            if any(map(lambda r: r.name == nameField.text(), repos)):
-                msgBox = QtWidgets.QMessageBox(  # noqa
-                    QtWidgets.QMessageBox.Warning,
-                    'Duplicate Repository Error',
-                    f'A repository named {nameField.text()} already exists.',
-                    informativeText=textwrap.dedent("""
-                    Repository names must be unique to avoid ambiguity in the user interface.
-                    """),
-                    parent=self,
-                )
-                msgBox.open()
-            else:
-                repos.append(Repository(name=nameField.text(), uri=uriField.text()))
-                Repository.save(repos)
-                self.doReloadRepositories()
+            row = self._editing_row
+
+        table.setItem(row, 0, QtWidgets.QTableWidgetItem(name))
+        table.setItem(row, 1, QtWidgets.QTableWidgetItem(uri))
+
+        repos = []
+        for row in range(table.rowCount()):
+            repos.append(Repository(
+                name=table.item(row, 0).text(),
+                uri=table.item(row, 1).text(),
+            ))
+        Repository.save(repos)
+        self.doReloadRepositories()
+        self.doClearEditor()
+
+    @QtCore.pyqtSlot()
+    def doClearEditor(self):
+        """Reset the repository editor to add mode."""
+        self._editing_row = None
+        nameField = self.widget('repository_name_field')
+        uriField = self.widget('repository_uri_field')
+        addBtn = self.widget('repository_add_button')
+        table = self.widget('repository_table_widget')
+
+        nameField.clear()
+        uriField.clear()
+        blocker = QtCore.QSignalBlocker(table)
+        table.clearSelection()
+        del blocker
+        addBtn.setText('Add')
+
+    @QtCore.pyqtSlot()
+    def doRepositorySelectionChanged(self):
+        """Populate the editor with the selected repository."""
+        table = self.widget('repository_table_widget')
+        selectedRows = table.selectionModel().selectedRows()
+
+        if len(selectedRows) != 1:
+            self.doClearEditor()
+            return
+
+        row = selectedRows[0].row()
+        nameItem = table.item(row, 0)
+        uriItem = table.item(row, 1)
+        if not nameItem or not uriItem:
+            self.doClearEditor()
+            return
+
+        self._editing_row = row
+        self.widget('repository_name_field').setText(nameItem.text())
+        self.widget('repository_uri_field').setText(uriItem.text())
+        self.widget('repository_add_button').setText('Update')
 
     @QtCore.pyqtSlot()
     def doReloadRepositories(self):
@@ -213,7 +282,7 @@ class RepositoryManagerDialog(QtWidgets.QDialog, HasWidgetSystem):
         widget = self.widget('repository_table_widget')  # type: QtWidgets.QTableWidget
         selections = widget.selectedRanges()
         for sel in selections:
-            for row in range(sel.bottomRow(), sel.topRow() + 1):
+            for row in range(sel.bottomRow(), sel.topRow() - 1, -1):
                 widget.removeRow(row)
         # Save the current repositories list
         repos = []
@@ -224,3 +293,4 @@ class RepositoryManagerDialog(QtWidgets.QDialog, HasWidgetSystem):
             ))
         Repository.save(repos)
         self.doReloadRepositories()
+        self.doClearEditor()
