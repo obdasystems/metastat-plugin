@@ -141,7 +141,6 @@ class MetastatWidget(QtWidgets.QWidget):
         self.typeLabel.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
         self.typeField = ComboBox(self)
         self.typeField.addItem('')
-        self.typeField.addItems(['category', 'classification', 'unit-type', 'variable'])
         self.typeField.setCurrentIndex(0)
         self.typeField.setScrollEnabled(False)
         self.lemmaLabel = QtWidgets.QLabel(self, objectName='lemma_label')
@@ -345,6 +344,7 @@ class MetastatWidget(QtWidgets.QWidget):
         name = self.repoCombobox.itemText(index)
         repo = first(Repository.load(), filter_on_item=lambda i: i.name == name)
         self.model.clear()
+        self.refreshTypeOptions()
         if repo:
             settings = QtCore.QSettings()
             settings.setValue('metastat/index', self.repoCombobox.currentIndex())
@@ -586,6 +586,7 @@ class MetastatWidget(QtWidgets.QWidget):
                         childItem.setData(NamedEntity.from_dict(child))
                         item.appendRow(childItem)
                     self.model.appendRow(item)
+                self.refreshTypeOptions()
             elif reply.isFinished() and reply.error() != QtNetwork.QNetworkReply.NetworkError.NoError:
                 msg = f'Failed to retrieve metastat data: {reply.errorString()}'
                 LOGGER.warning(msg)
@@ -601,6 +602,37 @@ class MetastatWidget(QtWidgets.QWidget):
             Failed to retrieve metastat data.
             See System Log for details.
             """)
+
+    def refreshTypeOptions(self) -> None:
+        """
+        Rebuild the type filter options from the currently loaded entities.
+        """
+        current = self.typeField.currentText()
+        types = []
+        seen = set()
+
+        for row in range(self.model.rowCount()):
+            item = self.model.item(row)
+            if not item:
+                continue
+            data = item.data()
+            if isinstance(data, NamedEntity) and data.type:
+                entity_type = data.type.strip()
+                if entity_type and entity_type not in seen:
+                    seen.add(entity_type)
+                    types.append(entity_type)
+
+        self.typeField.blockSignals(True)
+        try:
+            self.typeField.clear()
+            self.typeField.addItem('')
+            self.typeField.addItems(types)
+            index = self.typeField.findText(current)
+            self.typeField.setCurrentIndex(index if index >= 0 else 0)
+        finally:
+            self.typeField.blockSignals(False)
+
+        self.proxy.setTypeFilter(self.typeField.currentText())
 
     #############################################
     #   INTERFACE
