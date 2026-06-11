@@ -34,6 +34,7 @@ from eddy.ui.fields import (
     StringField,
     TextField,
 )
+from eddy.ui import images_rc
 
 from .dialogs import RepositoryManagerDialog
 from .model import NamedEntity
@@ -107,14 +108,14 @@ class MetastatWidget(QtWidgets.QWidget):
         ##############################
 
         self.repoButton = QtWidgets.QPushButton('Edit repositories', objectName='repo_edit_button')
-        refreshIconPath = Path(__file__).resolve().parent / 'resources' / 'icons' / 'ic_refresh_black_24dp_1x.png'
-        checkIconPath = Path(__file__).resolve().parent / 'resources' / 'icons' / 'ic_check_sync_black_24dp.png'
+        #refreshIconPath = Path(__file__).resolve().parent / 'resources' / 'icons' / 'ic_refresh_black_24dp_1x.png'
+        #checkIconPath = Path(__file__).resolve().parent / 'resources' / 'icons' / 'ic_check_sync_black_24dp.png'
         self.refreshButton = QtWidgets.QPushButton(objectName='repo_sync_button')
-        self.refreshButton.setIcon(QtGui.QIcon(str(refreshIconPath)))
+        self.refreshButton.setIcon(QtGui.QIcon(':/icons/24/ic_refresh_black'))
         self.refreshButton.setIconSize(QtCore.QSize(18, 18))
         self.refreshButton.setToolTip('Sync repository')
         self.checkEntitiesButton = QtWidgets.QPushButton(objectName='entities_sync_button')
-        self.checkEntitiesButton.setIcon(QtGui.QIcon(str(checkIconPath)))
+        self.checkEntitiesButton.setIcon(QtGui.QIcon(":/icons/24/ic_check_sync"))
         self.checkEntitiesButton.setIconSize(QtCore.QSize(18, 18))
         self.checkEntitiesButton.setToolTip('Check ontology entities sync')
         self.repoCombobox = QtWidgets.QComboBox(self)
