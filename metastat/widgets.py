@@ -5,7 +5,6 @@ from abc import (
     abstractmethod,
 )
 import json
-from pathlib import Path
 from typing import Any
 
 from PyQt5 import (
@@ -14,7 +13,10 @@ from PyQt5 import (
     QtNetwork,
     QtWidgets,
 )
-from eddy.core.commands.iri import ( CommandIRIAddAnnotationAssertion, CommandIRIRemoveAnnotationAssertion)
+from eddy.core.commands.iri import (
+    CommandIRIAddAnnotationAssertion,
+    CommandIRIRemoveAnnotationAssertion,
+)
 from eddy.core.commands.nodes import CommandNodeSetBrush
 from eddy.core.functions.misc import first
 from eddy.core.functions.signals import connect
@@ -821,12 +823,18 @@ class MetastatView(QtWidgets.QTreeView):
         if index:
             item = proxy.sourceModel().itemFromIndex(proxy.mapToSource(index))
             item.setText(entityText(item.data().to_dict(deep=True)))
+            for child_num in range(item.rowCount()):
+                child = item.child(child_num, 0)
+                child.setText(entityText(child.data().to_dict(deep=True)))
             super().update(index)
         else:
             for row in range(self.model().rowCount()):
                 index = self.model().index(row, 0)
                 item = proxy.sourceModel().itemFromIndex(proxy.mapToSource(index))
                 item.setText(entityText(item.data().to_dict(deep=True)))
+                for child_num in range(item.rowCount()):
+                    child = item.child(child_num, 0)
+                    child.setText(entityText(child.data().to_dict(deep=True)))
             super().update()
 
 
