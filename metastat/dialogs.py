@@ -18,16 +18,35 @@ from .settings import Repository
 class EntityTypeDialog(QtWidgets.QDialog):
     """Dialog to select entity type in the ontology when dropped onto a diagram."""
 
-    def __init__(self, entity, parent: QtWidgets.QWidget = None):
+    def __init__(self, entity, type_: Item = None, parent: QtWidgets.QWidget = None):
         super().__init__(parent)
         self.entity = entity
 
         layout = QtWidgets.QVBoxLayout(self)
-        layout.addWidget(QtWidgets.QLabel(f"Choose an Entity type for {entity.id}:"))
-        class_rb = QtWidgets.QRadioButton("Class")
-        object_property_rb = QtWidgets.QRadioButton("Object Property")
-        data_property_rb = QtWidgets.QRadioButton("Data Property")
-        individual_rb = QtWidgets.QRadioButton("Individual")
+        layout.addWidget(QtWidgets.QLabel(
+            f"Choose an Entity type for {entity.id}:"
+            if not type_ else f"Choose options for {type_.realName}: {entity.id}:"
+        ))
+        class_rb = QtWidgets.QRadioButton(  # noqa
+            "Class",
+            enabled=type_ is None,
+            checked=type_ == Item.ConceptNode,
+        )
+        object_property_rb = QtWidgets.QRadioButton(  # noqa
+            "Object Property",
+            enabled=type_ is None,
+            checked=type_ == Item.RoleNode,
+        )
+        data_property_rb = QtWidgets.QRadioButton(  # noqa
+            "Data Property",
+            enabled=type_ is None,
+            checked=type_ == Item.AttributeNode,
+        )
+        individual_rb = QtWidgets.QRadioButton(  # noqa
+            "Individual",
+            enabled=type_ is None,
+            checked=type_ == Item.IndividualNode,
+        )
 
         self.button_group = QtWidgets.QButtonGroup(self)
         self.button_group.addButton(class_rb, Item.ConceptNode)
