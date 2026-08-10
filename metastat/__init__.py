@@ -10,7 +10,7 @@ from PyQt5 import (
 from eddy.core.commands.iri import CommandIRIAddAnnotationAssertion
 from eddy.core.commands.edges import CommandEdgeAdd
 from eddy.core.commands.nodes import CommandNodeAdd
-from eddy.core.datatypes.graphol import Item
+from eddy.core.datatypes.graphol import Item, Identity
 from eddy.core.datatypes.misc import DiagramMode
 from eddy.core.diagram import Diagram
 from eddy.core.functions.misc import snap
@@ -69,22 +69,35 @@ class MetastatPlugin(AbstractPlugin):
     #################################
 
     @QtCore.pyqtSlot(QtWidgets.QGraphicsScene)
-    def onDiagramAdded(self, diagram):
+    def onDiagramAdded(self, diagram: Diagram):
         """
         Executed when a diagram is added to the project.
-        :typw diagram: Diagram
         """
         self.debug('Connecting to diagram: %s', diagram.name)
         connect(diagram.sgnDragDropEvent, self.onDiagramDragDropEvent)
         connect(diagram.sgnModeChanged, self.onDiagramModeChanged)
 
     @QtCore.pyqtSlot(QtWidgets.QGraphicsScene, QtWidgets.QGraphicsSceneDragDropEvent)
-    def onDiagramDragDropEvent(self, diagram, event: QtWidgets.QGraphicsSceneDragDropEvent):
-        # Show entity type selection diagram
+    def onDiagramDragDropEvent(self, diagram: Diagram, event: QtWidgets.QGraphicsSceneDragDropEvent):
+        """
+        Executed when an entity is dropped on a diagram.
+        """
         if event.mimeData().hasFormat('application/json+metastat'):
             entity = NamedEntity.from_dict(json.loads(event.mimeData().data('application/json+metastat').data()))
-            dialog = EntityTypeDialog(entity, self.project.session)
-            if dialog.exec_() == QtWidgets.QDialog.Accepted:
+            type_ = None
+            for n in diagram.items(event.scenePos(), edges=False):
+                # If dropped on a restriction node or set operation force type to be concept
+                if n and n.Type in [Item.DomainRestrictionNode,
+                                    Item.RangeRestrictionNode if n.identity() != Identity.ValueDomain else None,
+                                    Item.IntersectionNode,
+                                    Item.DisjointUnionNode,
+                                    Item.UnionNode]:
+                    type_ = Item.ConceptNode
+            # Show entity type selection diagram to allow inclusion of related entities if either:
+            #   1. Dropped on a restriction or set operation node, and it has related items
+            #   2. Dropped on diagram background
+            dialog = EntityTypeDialog(entity, type_, self.project.session)
+            if (type_ and not entity.related) or dialog.exec_() == QtWidgets.QDialog.Accepted:
                 self.session.undostack.beginMacro('metastat entity drag&drop')
                 subject = self.session.project.getIRI('http://www.istat.it/metastat/' + str(entity.id))
                 predicate = self.session.project.getIRI('urn:x-graphol:origin')
@@ -109,7 +122,7 @@ class MetastatPlugin(AbstractPlugin):
                     cmd = CommandIRIAddAnnotationAssertion(self.session.project, subject, ast)
                     self.session.undostack.push(cmd)
 
-                # Add definitions for entity as rdfs:comment
+                # Add descriptions for entity as rdfs:comment
                 for description in entity.description:
                     ast = AnnotationAssertion(
                         subject,
@@ -174,14 +187,14 @@ class MetastatPlugin(AbstractPlugin):
                                 cmd = CommandIRIAddAnnotationAssertion(self.session.project, subject, ast)
                                 self.session.undostack.push(cmd)
 
-                            # Add definitions for related entity as rdfs:comment
-                            for definition in childEntity.definition:
+                            # Add descriptions for related entity as rdfs:comment
+                            for description in childEntity.description:
                                 ast = AnnotationAssertion(
                                     subject,
                                     AnnotationAssertionProperty.Comment.value,
-                                    definition.value,
+                                    description.value,
                                     None,
-                                    definition.lang,
+                                    description.lang,
                                 )
                                 cmd = CommandIRIAddAnnotationAssertion(self.session.project, subject, ast)
                                 self.session.undostack.push(cmd)
@@ -233,14 +246,14 @@ class MetastatPlugin(AbstractPlugin):
                             cmd = CommandIRIAddAnnotationAssertion(self.session.project, subject, ast)
                             self.session.undostack.push(cmd)
 
-                        # Add definitions for related entity as rdfs:comment
-                        for definition in typeEntity.definition:
+                        # Add descriptions for related entity as rdfs:comment
+                        for description in typeEntity.description:
                             ast = AnnotationAssertion(
                                 subject,
                                 AnnotationAssertionProperty.Comment.value,
-                                definition.value,
+                                description.value,
                                 None,
-                                definition.lang,
+                                description.lang,
                             )
                             cmd = CommandIRIAddAnnotationAssertion(self.session.project, subject, ast)
                             self.session.undostack.push(cmd)
